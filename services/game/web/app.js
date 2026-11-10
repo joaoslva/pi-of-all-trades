@@ -25,8 +25,8 @@ async function api(path, body) {
   const j = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, j };
 }
-const act = (type, extra) => api(`/api/action?token=${encodeURIComponent(token)}`, { type, ...extra })
-  .then(r => { if (r.ok && r.j.phase) setView(r.j); });
+// The stream is the only writer of the view: an action's own response can land after a newer event and roll the screen back.
+const act = (type, extra) => api(`/api/action?token=${encodeURIComponent(token)}`, { type, ...extra });
 
 function setView(v) {
   view = v; receivedAt = Date.now(); refusal = null;

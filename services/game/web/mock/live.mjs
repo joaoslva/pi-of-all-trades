@@ -24,7 +24,7 @@ await C.fill("input", "Cy"); await C.click("text=Join");
 await C.waitForSelector("text=dragons have decided");
 ok("third phone refused with the dragons text");
 await A.screenshot({ path: `${OUT}/lobby.png` });
-await A.click('[aria-label="Fewer rounds"]'); await A.click('[aria-label="Fewer rounds"]');
+for (const n of ["2", "1"]) { await A.click('[aria-label="Fewer rounds"]'); await A.waitForFunction(n => document.querySelector("output")?.textContent === n, n); }
 await A.click("text=Start");
 
 for (let round = 1; round <= 1; round++) {
