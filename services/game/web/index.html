@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0a12">
+<title>Guessing Day</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="embers" aria-hidden="true"></div>
+<div id="lost" class="lost" role="status" hidden>Connection lost. Reconnecting...</div>
+<main class="app">
+  <header class="title">
+    <svg class="corner tl" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 22V8a6 6 0 0 1 6-6h14M7 22V10a3 3 0 0 1 3-3h12" /></svg>
+    <svg class="corner tr" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 22V8a6 6 0 0 1 6-6h14M7 22V10a3 3 0 0 1 3-3h12" /></svg>
+    <h1>Guessing Day</h1>
+    <p>Riders Quadrant</p>
+  </header>
+  <section id="bar" class="bar" hidden aria-label="Scoreboard"></section>
+  <section id="screen" class="screen"></section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
