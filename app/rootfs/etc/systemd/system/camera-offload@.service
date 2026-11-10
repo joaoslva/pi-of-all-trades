@@ -3,11 +3,11 @@ Description=Offload Aiptek camera from /dev/%I
 # The media directory lives on the root filesystem; do not start before it.
 After=local-fs.target
 # Never run two at once -- the script also takes a flock, but this is cheaper.
-ConditionPathExists=/usr/local/bin/camera-offload
+ConditionPathExists=/usr/local/bin/camera-drive
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/camera-offload /dev/%I
+ExecStart=/usr/local/bin/camera-drive offload /dev/%I
 
 # Hashing every file on a Zero 2 W is not fast. A 16MB card is quick, but a
 # 2GB card full of JPEGs is not, so allow plenty of room before systemd kills it.

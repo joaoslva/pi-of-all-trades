@@ -68,6 +68,11 @@ for c in "${components[@]}"; do
     die "hub binary missing: run 'make -C hub build' first"
 done
 
+for c in "${components[@]}"; do
+  [ "$c" != app ] || [ -f "$REPO/app/rootfs/usr/local/bin/camera-drive" ] ||
+    die "app binary missing: run 'make -C app build' first"
+done
+
 # Only regular files: the install step below does not handle symlinks,
 # sockets or anything else, so refuse them rather than half-deploy.
 odd="$(find "${roots[@]}" -name __pycache__ -prune -o ! -type f ! -type d -print)"
