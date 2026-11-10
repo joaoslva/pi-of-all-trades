@@ -1,0 +1,1 @@
+{"id":"music","name":"Music","description":"Navidrome: stream the music library","class":"exclusive","units":["navidrome.service"],"port":8084}
