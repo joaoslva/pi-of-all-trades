@@ -11,6 +11,7 @@ Pi off. With no known Wi-Fi around, the Pi raises its own hotspot
 
 Today's services:
 
+- **Guessing Day**: a two-player Fourth Wing guessing game for two phones. Port 8090. `docs/game.md`.
 - **camera-drive**: empties an Aiptek Cam 3200 by itself when it is plugged in
   (offload), and works as its camcorder back-end (live view, recording, a
   gallery with playback, export and zip). Port 8081. How it works and what it
@@ -25,6 +26,7 @@ file: `docs/adding-a-service.md`.
 ```
 services/   one folder per service, each with its own Go module and rootfs/ mirroring the Pi's /
   camera-drive/  the camera application, one Go binary `camera-drive` (offload, wipe, live, web), systemd units, udev rule
+  game/          Guessing Day, the two-player guessing game (`docs/game.md`)
 hub/        pihub, the Go landing page on port 80 (hub/rootfs/ mirrors the Pi's /; `make -C hub build` first)
 platform/   the Pi itself: deploy.sh, network fallback, provisioning and recovery scripts
 docs/       PLAN.md (the build plan), admin.md, network.md, adding-a-service.md, camera-drive.md (the camera service), history.md (working notes)

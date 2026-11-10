@@ -18,3 +18,4 @@ services/camera-drive/rootfs/usr/local/bin/camera-drive
 /hub/pihub
 /services/camera-drive/camera-drive
 /services/game/rootfs/usr/local/bin/guessing-day
+/services/game/rootfs/usr/share/guessing-day/

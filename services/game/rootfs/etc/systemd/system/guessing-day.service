@@ -1,0 +1,17 @@
+[Unit]
+Description=Guessing Day, the two-player guessing game
+After=network.target
+
+[Service]
+Type=simple
+User=joao
+Group=joao
+ExecStart=/usr/local/bin/guessing-day -listen 0.0.0.0:8090 -data /var/lib/guessing-day -web /usr/share/guessing-day/web -content /usr/share/guessing-day/content
+StateDirectory=guessing-day
+Restart=on-failure
+RestartSec=3
+MemoryMax=64M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes

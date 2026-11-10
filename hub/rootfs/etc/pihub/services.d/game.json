@@ -1,0 +1,8 @@
+{
+  "id": "game",
+  "name": "Guessing Day",
+  "description": "A two-player Fourth Wing guessing game",
+  "class": "exclusive",
+  "units": ["guessing-day"],
+  "port": 8090
+}

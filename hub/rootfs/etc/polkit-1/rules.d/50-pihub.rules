@@ -24,7 +24,7 @@ polkit.addRule(function (action, subject) {
     if (nm.indexOf(action.id) >= 0) {
         return polkit.Result.YES;
     }
-    var units = ["camera-drive-web.service", "camera-live.service"];
+    var units = ["camera-drive-web.service", "camera-live.service", "guessing-day.service"];
     // pihub-wifi-revert is the transient timer and service that undo an unkept Wi-Fi switch.
     var revert = ["pihub-wifi-revert.service", "pihub-wifi-revert.timer"];
     if (action.id === "org.freedesktop.systemd1.manage-units" &&
