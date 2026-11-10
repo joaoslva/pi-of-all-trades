@@ -73,17 +73,14 @@ else
   report "pihub restarts within 5 s of kill -9" 1
 fi
 
-# Stopping the web app takes camera-live with it (PartOf).
-pi 'sudo -n systemctl restart camera-drive-web'; sleep 3
-if ! pi 'systemctl -q is-active camera-live'; then
-  report "stopping camera-drive-web stops camera-live" 1 "Wants= did not start camera-live"
-elif pi 'sudo -n systemctl stop camera-drive-web'; wait_for 10 pi '! systemctl -q is-active camera-live'; then
-  report "stopping camera-drive-web stops camera-live" 0
+# Stopping the web app takes camera-live with it (PartOf), whether or not a camera is plugged in.
+if pi 'systemctl show camera-live -p PartOf --value' | grep -q camera-drive-web.service; then
+  report "camera-live is PartOf camera-drive-web" 0
 else
-  report "stopping camera-drive-web stops camera-live" 1
+  report "camera-live is PartOf camera-drive-web" 1
 fi
-pi 'sudo -n systemctl start camera-drive-web'
 
+if [ -z "${NO_REBOOT:-}" ]; then
 # Never reboot in the middle of an offload.
 idle() { [ -z "$(pi 'systemctl list-units "camera-offload@*" --state=activating,active --no-legend')" ]; }
 wait_for 900 idle || echo "INFO  offload still running after 15 min, rebooting anyway"
@@ -100,6 +97,8 @@ if wait_for 180 pi true 2>/dev/null && [ "$(boot_id)" != "$before" ]; then
 else
   report "after reboot pihub and camera-drive-web are active" 1 "Pi did not come back"
 fi
+fi
+had_camera=${had_camera:-0}
 
 # Camera checks look at this boot's journal only; they never touch the camera's storage.
 # The camera enumerates late in boot, so wait for it if it was there before.

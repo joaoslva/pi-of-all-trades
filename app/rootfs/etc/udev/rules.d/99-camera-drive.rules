@@ -23,15 +23,15 @@ ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="partition", \
   ENV{UDISKS_IGNORE}="1"
 
 # --- live mode: live view + camcorder -------------------------------------
-# No rule starts camera-live: camera-drive-web Wants= it, so it starts with the
-# app and stops with it (PartOf=).
-#
 # camera-live owns /dev/video0 for as long as the camera is plugged in this
 # mode, and serves both the preview and any recording from one capture. Only
 # one process can hold the V4L2 device, so this must be the only thing that
 # opens it -- do not add a second unit here.
 #
-# There is deliberately no "remove" rule. Running systemctl from a
+# There is deliberately no matching "remove" rule. Running systemctl from a
 # udev rule can deadlock, and it is unnecessary: when the camera is unplugged
 # its V4L2 node disappears, ffmpeg exits, and camera-live finalises whatever
 # it was writing and returns on its own.
+ACTION=="add", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="08ca", \
+  ENV{ID_MODEL_ID}=="2022", \
+  TAG+="systemd", ENV{SYSTEMD_WANTS}="camera-live.service"

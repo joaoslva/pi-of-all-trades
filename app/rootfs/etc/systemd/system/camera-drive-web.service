@@ -1,7 +1,7 @@
 [Unit]
 Description=camera-drive web gallery
 After=network.target
-Wants=network.target camera-live.service
+Wants=network.target
 
 [Service]
 Type=simple
