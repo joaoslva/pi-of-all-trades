@@ -4,7 +4,7 @@ The Pi becomes a small host for services. A Go binary called `pihub` owns port 8
 
 Rule for the whole program. Every service is a systemd unit plus a JSON file, and the hub is the only thing that starts or stops them.
 
-Branches in order are H1, H2, H3, H4 (hub) and C1, C2, C3, C4 (camera). H5 (service passwords) is benched and H6 (visual polish) is for later.
+Branches in order are H1, H2, H3, H4 (hub) and C1, C2, C3, C4 (camera). H5 (service passwords) is benched and H6 (visual redesign) and H7 (account backend) follow H4.
 
 ## How we work
 
@@ -97,9 +97,11 @@ Checks.
 - `verify.sh`. A deliberately wrong password returns to the TP-Link network within 60 s and `ssh` still works. While a switch is in flight the fallback does not raise the hotspot. With no known network the hotspot comes up and `http://10.42.0.1/admin` loads. `kill -9 pihub` while in hotspot mode leaves the hotspot up. The fallback timer is active after a reboot.
 - Memory. Under 23 MB.
 
-## H6. Visual improvements to the hub and admin pages
+## H6. Visual redesign of the hub and admin pages
 
-Later, after H3 and H4, and not before the operator asks. Scope is the look of `hub/web/index.html` and `hub/web/admin.html` only: spacing, type, colour, service cards, a clearer service table and warning banner, dark mode, and a check at phone width. No new behaviour and no new dependencies. Checks are the existing `hub/verify.sh` plus a screenshot of each page at 390 px width reviewed by the operator.
+The operator's direction. Earthy Yosemite-autumn palette (parchment, bark, granite, alpenglow gold, dogwood rust, sequoia green, Merced blue-grey), light and dark following the system. Hub page: simple soft raised 3D buttons with a little perspective, and a lock icon in the corner that links to `/admin`. Admin page: grouped cards (Stats with a Refresh button, Services, Wi-Fi, Camera, System, Power, Password), everything visible with no page scroll at 1366x768 and 1920x1080, stacking on a phone. The Password card changes the password (needs the current one; `pihub passwd` over SSH stays the backup) and has a light bulb that shows a configurable reminder hint, only inside that card and only when logged in. Built on the H7 account API. No behaviour changes elsewhere.
+
+Checks. Playwright (the `screenshots` skill) drives a laptop sandbox with fake `systemctl` and `nmcli`: `check-fit.mjs` on `/admin` logged in at both desktop sizes and a phone width, screenshots of every state (client, hotspot, switch waiting for Keep, warning banner, service off, errors, light and dark), and a contrast script that fails any text or control pair under WCAG AA. `hub/verify.sh` still passes on the Pi. Memory stays under 23 MB. The operator reviews the screenshots and the live pages.
 
 ## C1. Offload and wipe in Go
 

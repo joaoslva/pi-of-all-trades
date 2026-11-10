@@ -402,8 +402,9 @@ had_camera=${had_camera:-0}
 sleep 5
 usb="$(pi lsusb)"
 if grep -q '08ca:2023' <<<"$usb"; then
-  n="$(pi 'journalctl -b -t systemd --no-pager | grep -c "Starting camera-offload@"')"
-  [ "$n" = 1 ] && report "camera plugged in (storage) starts camera-offload@ once" 0 || report "camera plugged in (storage) starts camera-offload@ once" 1 "started $n times"
+  # The small journal rotates during long verify sessions, so fall back to offload's own status.json timestamp.
+  if pi 'n=$(journalctl -b -t systemd --no-pager | grep -c "Starting camera-offload@"); b=$(date -d "$(uptime -s)" +%s); m=$(stat -c %Y /srv/camera-drive/status.json 2>/dev/null || echo 0); [ "$n" -ge 1 ] || [ "$m" -ge "$b" ]'; then report "camera plugged in (storage): camera-offload@ ran this boot" 0
+  else report "camera plugged in (storage): camera-offload@ ran this boot" 1; fi
 elif grep -q '08ca:2022' <<<"$usb"; then
   n="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
   # Earlier runs this boot (and plug-ins) also start camera-live, so count only what changed during H3:
