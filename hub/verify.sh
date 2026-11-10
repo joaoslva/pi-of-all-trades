@@ -106,7 +106,7 @@ had_camera=${had_camera:-0}
 sleep 5
 usb="$(pi lsusb)"
 if grep -q '08ca:2023' <<<"$usb"; then
-  n="$(pi 'journalctl -b -u "camera-offload@*" --no-pager | grep -c "Started camera-offload@"')"
+  n="$(pi 'journalctl -b -u "camera-offload@*" --no-pager | grep -c "Starting camera-offload@"')"
   [ "$n" = 1 ] && report "camera plugged in (storage) starts camera-offload@ once" 0 || report "camera plugged in (storage) starts camera-offload@ once" 1 "started $n times"
 elif grep -q '08ca:2022' <<<"$usb"; then
   n="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
