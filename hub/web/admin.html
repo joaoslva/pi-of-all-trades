@@ -4,76 +4,224 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pi admin</title>
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 0 auto; padding: 16px; }
-  input, button { font: inherit; padding: 12px; margin: 6px 0; border-radius: 8px; border: 1px solid; width: 100%; box-sizing: border-box; }
-  dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
-  dt { opacity: .7; } dd { margin: 0; text-align: right; }
-  .err { color: #c00; }
-  .warn { border: 1px solid #c60; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
-  .svc { border: 1px solid; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
-  .svc small { opacity: .7; display: block; }
-  .row { display: flex; gap: 8px; } .row button { width: auto; flex: 1; }
+  :root { font-size: 14px; }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  button, input { font: inherit; color: inherit; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+  .bar h1 { margin: 0; font-size: 1.05rem; font-weight: 650; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar h1 span { color: var(--muted); font-weight: 500; }
+  .bar a { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 6px 4px; }
+  main { flex: 1; min-height: 0; padding: 0 16px 16px; }
+  .grid { display: grid; gap: 14px; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-height: 0; min-width: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: none;
+    box-shadow: 0 1px 2px rgb(var(--shadow) / .06), 0 6px 18px -10px rgb(var(--shadow) / .18); }
+  .grow { flex: 0 1 auto; } /* natural height; shrinks (its list scrolls) only when the column is full */
+  .scroll { overflow: auto; min-height: 0; flex: 1 1 auto; margin: 0 -6px; padding: 0 6px; scrollbar-color: var(--field) transparent; }
+  .head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+  h2 { margin: 0; flex: 1; font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-ink); }
+  h3 { margin: 6px 0 4px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+  .small, small { font-size: .86rem; color: var(--muted); }
+  p { margin: 0; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0; }
+  dt { color: var(--muted); } dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  button, .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 11px; min-height: 32px;
+    border-radius: 9px; border: 1px solid var(--field); background: var(--card-hi); cursor: pointer; white-space: nowrap;
+    box-shadow: inset 0 1px 0 var(--edge), 0 1px 2px rgb(var(--shadow) / .12); }
+  button:hover { background: var(--sunk); }
+  button:active { transform: translateY(1px); box-shadow: none; }
+  button:disabled { opacity: .55; cursor: default; transform: none; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.06); }
+  button.danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger); font-weight: 600; }
+  button.danger:hover { filter: brightness(1.08); }
+  button.icon { padding: 5px; min-width: 32px; }
+  input { width: 100%; padding: 6px 10px; min-height: 34px; border-radius: 9px; border: 1px solid var(--field); background: var(--sunk); }
+  input[aria-invalid=true] { border-color: var(--danger-ink); }
+  label { display: block; font-size: .86rem; color: var(--muted); margin-bottom: 2px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .row > .fill { flex: 1; min-width: 0; }
+  .msg:empty { display: none; }
+  .msg { font-size: .9rem; }
+  .err { color: var(--danger-ink); }
+  .good { color: var(--ok); }
+  .banner { border-radius: 10px; padding: 8px 10px; background: var(--danger-bg); }
+  .banner strong { color: var(--danger-ink); }
+  .keep { background: var(--warn-bg); border-left: 4px solid var(--accent); }
+  ul.list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: var(--sunk); }
+  .item > div { flex: 1; min-width: 0; }
+  .item strong { font-weight: 600; }
+  .item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { display: inline-block; font-size: .74rem; padding: 0 6px; margin-left: 4px; border-radius: 6px; border: 1px solid var(--field); color: var(--muted); vertical-align: 1px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; border: 2px solid var(--danger-ink); }
+  .dot.on { background: var(--ok); border-color: var(--ok); }
+  .on-t { color: var(--ok); font-weight: 600; } .off-t { color: var(--danger-ink); font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tile { background: var(--sunk); border-radius: 10px; padding: 6px 8px; }
+  .tile b { display: block; font-size: 1.1rem; font-weight: 650; white-space: nowrap; }
+  .meter .row { justify-content: space-between; }
+  .track { height: 8px; border-radius: 4px; background: var(--sunk); overflow: hidden; margin-top: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+  .track i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width .4s; }
+  .track i.high { background: var(--danger); }
+  .chip { font-size: .8rem; padding: 2px 8px; border-radius: 999px; background: var(--sunk); white-space: nowrap; }
+  details summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; padding: 4px 0; }
+  .pwgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .pwgrid .wide { grid-column: 1 / -1; }
+  .bulb { border-radius: 50%; color: var(--accent-ink); }
+  .bulb[aria-expanded=true] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .hint { background: var(--info-bg); color: var(--text); border-radius: 10px; padding: 8px 10px; }
+  .hint b { color: var(--info); font-weight: 600; margin-right: 6px; }
+  #login { margin: auto; width: min(340px, 100%); padding: 22px; gap: 12px; }
+  #login h2 { font-size: 1.1rem; letter-spacing: 0; text-transform: none; color: var(--text); }
+  @media (min-width: 1000px) and (min-height: 600px) {
+    body { height: 100vh; overflow: hidden; }
+    main { display: flex; }
+    .grid { flex: 1; grid-template-columns: 1fr 1.08fr 1fr; grid-template-rows: minmax(0, 1fr); min-height: 0; max-width: 1680px; margin: 0 auto; }
+  }
+  @media (max-width: 999px), (max-height: 599px) {
+    .grid { max-width: 40rem; margin: 0 auto; }
+  }
+  @media (max-width: 480px) { .tiles { grid-template-columns: 1fr 1fr; } .pwgrid { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { .track i { transition: none; } button:active { transform: none; } }
 </style>
 </head>
 <body>
-<h1>Pi admin</h1>
-<form id="login" hidden>
-  <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
-  <button>Log in</button>
-  <p class="err" id="err"></p>
+<a class="skip" href="#main">Skip to content</a>
+<header class="bar">
+  <h1><span id="host">Pi</span> <span>admin</span></h1>
+  <a href="/"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Services</a>
+  <button id="logout" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Log out</button>
+</header>
+<main id="main">
+<form id="login" class="card" hidden>
+  <h2>Admin login</h2>
+  <div><label for="pw">Password</label><input id="pw" type="password" name="password" autocomplete="current-password" required></div>
+  <button class="primary">Log in</button>
+  <p class="msg err" id="err" aria-live="polite"></p>
 </form>
-<div id="main" hidden>
-  <div id="warnings"></div>
-  <dl id="stats"></dl>
-  <h2>Services</h2>
-  <div id="services"></div>
-  <h2>Wi-Fi</h2>
-  <dl id="wifi"></dl>
-  <div id="keep" class="warn" hidden>
-    <p id="keeptext"></p>
-    <button id="keepbtn">Keep this network</button>
+<div id="panel" class="grid" hidden>
+  <div class="col">
+    <section class="card" aria-labelledby="h-stats">
+      <div class="head">
+        <h2 id="h-stats">Stats</h2>
+        <span class="small num" id="updated" aria-live="off"></span>
+        <button id="pause" aria-pressed="false" title="Stop refreshing every 5 s"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
+        <button id="refresh" class="icon" aria-label="Refresh now" title="Refresh now"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg></button>
+      </div>
+      <div class="tiles num">
+        <div class="tile"><small>Load</small><b id="s-load">–</b></div>
+        <div class="tile"><small>CPU</small><b id="s-cpu">–</b></div>
+        <div class="tile"><small>Temp</small><b id="s-temp">–</b></div>
+        <div class="tile"><small>Uptime</small><b id="s-up">–</b></div>
+      </div>
+      <div class="meter"><div class="row"><span>Memory</span><span class="small num" id="s-mem"></span></div><div class="track"><i id="b-mem"></i></div></div>
+      <div class="meter"><div class="row"><span>Disk</span><span class="small num" id="s-disk"></span></div><div class="track"><i id="b-disk"></i></div></div>
+    </section>
+    <section class="card grow" aria-labelledby="h-svc">
+      <div class="head"><h2 id="h-svc">Services</h2></div>
+      <div id="warnings"></div>
+      <div class="scroll"><ul class="list" id="services"></ul></div>
+      <p class="msg" id="svcmsg" aria-live="polite"></p>
+    </section>
+    <section class="card" aria-labelledby="h-power">
+      <div class="head"><h2 id="h-power">Power</h2>
+        <button data-power="reboot">Reboot</button>
+        <button data-power="poweroff" class="danger">Power off</button>
+      </div>
+      <p class="msg" id="powermsg" aria-live="polite"></p>
+    </section>
   </div>
-  <button id="hotspotbtn"></button>
-  <h3>Saved networks</h3>
-  <div id="saved"></div>
-  <h3>Nearby networks</h3>
-  <button id="scanbtn">Scan</button>
-  <div id="nearby"></div>
-  <h3>Add a network</h3>
-  <form id="add">
-    <input name="ssid" placeholder="Network name (SSID)" maxlength="32" required>
-    <input name="password" type="password" placeholder="Password (empty for an open network)" autocomplete="off">
-    <button>Save network</button>
-  </form>
-  <button data-power="reboot">Reboot</button>
-  <button data-power="poweroff">Power off</button>
-  <p id="msg"></p>
+  <div class="col">
+    <section class="card grow" aria-labelledby="h-wifi">
+      <div class="head"><h2 id="h-wifi">Wi-Fi</h2><span class="chip" id="wifimode"></span></div>
+      <dl id="wifi"></dl>
+      <div id="keep" class="banner keep" hidden>
+        <p id="keeptext"></p>
+        <div class="row" style="margin-top:6px"><button id="keepbtn" class="primary">Keep this network</button></div>
+      </div>
+      <div class="row"><button id="hotspotbtn">Turn on hotspot</button><button id="scanbtn">Scan nearby</button></div>
+      <div class="scroll">
+        <h3>Saved networks</h3>
+        <ul class="list" id="saved"></ul>
+        <h3>Nearby networks</h3>
+        <div id="nearby"><p class="small">Press Scan nearby to look for networks.</p></div>
+      </div>
+      <details id="adddetails">
+        <summary>Add a network</summary>
+        <form id="add" class="pwgrid" style="margin-top:4px">
+          <div><label for="ssid">Network name (SSID)</label><input id="ssid" name="ssid" maxlength="32" required></div>
+          <div><label for="wpw">Password</label><input id="wpw" name="password" type="password" autocomplete="off" placeholder="empty for an open network"></div>
+          <div class="wide"><button class="primary">Save network</button></div>
+        </form>
+      </details>
+      <p class="msg" id="wifimsg" aria-live="polite"></p>
+    </section>
+    <section class="card" aria-labelledby="h-cam">
+      <div class="head"><h2 id="h-cam">Camera</h2></div>
+      <dl id="camera"></dl>
+      <div class="meter"><div class="row"><span>Drive</span><span class="small num" id="c-free"></span></div><div class="track"><i id="b-cam"></i></div></div>
+    </section>
+  </div>
+  <div class="col">
+    <section class="card" aria-labelledby="h-pw">
+      <div class="head"><h2 id="h-pw">Password</h2>
+        <button id="bulb" class="icon bulb" aria-expanded="false" aria-controls="hint" aria-label="Show the password reminder hint" title="Reminder hint"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg></button>
+      </div>
+      <p id="hint" class="hint" hidden aria-live="polite"></p>
+      <form id="pwform" class="pwgrid" novalidate>
+        <div class="wide"><label for="cur">Current password</label><input id="cur" type="password" autocomplete="current-password" aria-describedby="e-cur"><small class="err" id="e-cur"></small></div>
+        <div><label for="new1">New password</label><input id="new1" type="password" autocomplete="new-password" aria-describedby="e-new1"><small class="err" id="e-new1"></small></div>
+        <div><label for="new2">Repeat new</label><input id="new2" type="password" autocomplete="new-password" aria-describedby="e-new2"><small class="err" id="e-new2"></small></div>
+        <div class="wide"><label for="hintin">Reminder hint (optional)</label><input id="hintin" maxlength="120" autocomplete="off" placeholder="empty keeps the current hint" aria-describedby="e-hintin"><small class="err" id="e-hintin"></small></div>
+        <div class="wide row"><button class="primary">Change password</button><span class="small fill">Locked out? Over SSH: <code style="white-space:nowrap">sudo pihub passwd</code></span></div>
+      </form>
+      <p class="msg" id="pwmsg" aria-live="polite"></p>
+    </section>
+    <section class="card grow" aria-labelledby="h-sys">
+      <div class="head"><h2 id="h-sys">System</h2></div>
+      <div class="scroll"><dl id="system" class="num"></dl></div>
+    </section>
+  </div>
 </div>
-<p><a href="/">Services</a></p>
+</main>
 <script>
 const $ = id => document.getElementById(id);
 const post = (url, body) => fetch(url, {method: 'POST', body});
-let services = [];
 const text = (tag, t, cls) => { const e = document.createElement(tag); e.textContent = t; if (cls) e.className = cls; return e; };
+const say = (id, t, cls) => { $(id).textContent = t; $(id).className = 'msg' + (cls ? ' ' + cls : ''); };
+const fail = async (id, r) => say(id, 'Failed: ' + await r.text(), 'err');
+const dd = v => { const e = document.createElement('dd'); e.append(v); return e; };
+const rows = (dl, obj) => $(dl).replaceChildren(...Object.entries(obj).flatMap(([k, v]) => [text('dt', k), dd(v)]));
+const bytes = b => b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) + ' MB';
+const bar = (id, used, total) => { const p = total ? 100 * used / total : 0; $(id).style.width = p + '%'; $(id).classList.toggle('high', p >= 90); };
+const button = (label, cls, onclick) => { const b = text('button', label, cls); b.onclick = onclick; return b; };
+const changed = (key, v) => { const s = JSON.stringify(v); if (changed[key] === s) return false; changed[key] = s; return true; };
+
+let services = [];
 async function loadServices() {
   const r = await fetch('/admin/api/services');
   if (!r.ok) return;
   const d = await r.json();
+  if (!changed('svc', d)) return;
   services = d.services;
-  $('warnings').replaceChildren(...d.warnings.map(w => text('div', w.message, 'warn')));
+  $('warnings').replaceChildren(...d.warnings.map(w => { const b = text('p', ' ' + w.message, 'banner'); b.prepend(text('strong', 'Warning:')); return b; }));
   $('services').replaceChildren(...services.map(s => {
-    const box = text('div', '', 'svc');
-    const mem = s.memory_bytes == null ? 'n/a' : Math.round(s.memory_bytes / 1048576) + ' MB';
-    box.append(text('strong', s.name + (s.running ? ' (running)' : ' (stopped)')),
-      text('small', s.class + ' · memory ' + mem + ' · ' + s.units.map(u => u.unit + ': ' + u.state).join(', ')));
-    if (s.class === 'exclusive') {
-      const b = text('button', s.running ? 'Switch off ' + s.name : 'Switch to ' + s.name);
-      b.onclick = () => (s.running ? ask('stop', s) : ask('switch', s));
-      box.append(b);
-    }
-    return box;
+    const li = text('li', '', 'item');
+    const dot = text('span', '', 'dot' + (s.running ? ' on' : ''));
+    const info = text('div', '');
+    const name = text('strong', s.name);
+    const mem = s.memory_bytes == null ? '' : ' · ' + bytes(s.memory_bytes);
+    const detail = text('small', '');
+    detail.append(text('span', s.running ? 'Running' : 'Stopped', s.running ? 'on-t' : 'off-t'),
+      mem + ' · ' + s.units.map(u => u.unit + ' ' + u.state).join(', '));
+    info.append(name, text('span', s.class, 'tag'), detail);
+    li.append(dot, info);
+    if (s.class === 'exclusive') li.append(button(s.running ? 'Switch off' : 'Switch to', s.running ? '' : 'primary', () => ask(s.running ? 'stop' : 'switch', s)));
+    return li;
   }));
 }
 // The dialog names what stops and what starts; the server only runs it with the nonce from step one.
@@ -84,127 +232,211 @@ async function ask(verb, s) {
     (names ? 'Stop ' + names + ' and start ' + s.name + '?' : 'Start ' + s.name + '?');
   if (!confirm(q)) return;
   const url = '/admin/api/' + verb, id = s.id;
+  say('svcmsg', 'Working…');
   const {nonce} = await (await post(url, JSON.stringify({id}))).json();
   const r = await post(url, JSON.stringify({id, nonce}));
-  $('msg').textContent = r.ok ? 'Done.' : 'Failed: ' + await r.text();
+  r.ok ? say('svcmsg', 'Done.', 'good') : fail('svcmsg', r);
   loadServices();
 }
 // Wi-Fi. Every change is two calls: the first returns a nonce, the second runs it.
 async function wifiCall(op, body, question) {
   if (!confirm(question)) return null;
   const url = '/admin/api/wifi/' + op;
+  say('wifimsg', 'Working…');
   const one = await post(url, JSON.stringify(body));
-  if (!one.ok) { $('msg').textContent = 'Failed: ' + await one.text(); return null; }
+  if (!one.ok) { fail('wifimsg', one); return null; }
   const {nonce} = await one.json();
   const r = await post(url, JSON.stringify({...body, nonce}));
-  if (!r.ok) { $('msg').textContent = 'Failed: ' + await r.text(); return null; }
+  if (!r.ok) { fail('wifimsg', r); return null; }
+  say('wifimsg', '');
   return r.status === 204 ? {} : r.json();
 }
 let wifiKnown = {};
 async function loadWifi() {
   const r = await fetch('/admin/api/wifi');
-  if (!r.ok) return;
+  if (!r.ok) {
+    if (changed('wifi', r.status)) { $('wifimode').textContent = 'unknown'; rows('wifi', {Status: 'Wi-Fi status failed: ' + await r.text()}); $('hotspotbtn').disabled = $('scanbtn').disabled = true; }
+    return;
+  }
   const d = await r.json();
   wifiKnown = d;
+  if (!changed('wifi', d)) return;
   const hosting = d.mode.startsWith('hotspot');
   const modes = {client: 'Connected to a network', 'hotspot-on-demand': 'Pi hotspot, turned on by you (no internet)',
     'hotspot-fallback': 'Pi hotspot, raised automatically (no internet)', none: 'Not connected'};
-  const rows = {Mode: modes[d.mode] || d.mode,
-    Network: d.ssid || 'none', Address: d.ip ? d.ip + ' / ' + d.hostname : d.hostname,
-    'Last working network': d.last_client || 'none yet',
-    'Hotspot fallback': d.fallback_timer === 'active' ? 'watching' : 'NOT RUNNING (' + d.fallback_timer + ')'};
-  $('wifi').replaceChildren(...Object.entries(rows).flatMap(([k, v]) => [text('dt', k), text('dd', v)]));
+  $('wifimode').textContent = {client: 'client', 'hotspot-on-demand': 'hotspot', 'hotspot-fallback': 'hotspot (auto)', none: 'offline'}[d.mode] || d.mode;
+  const fb = d.fallback_timer === 'active' ? text('span', 'watching') : text('span', 'NOT RUNNING (' + d.fallback_timer + ')', 'off-t');
+  rows('wifi', {Mode: modes[d.mode] || d.mode, Network: d.ssid || 'none', Address: d.ip ? d.ip + ' / ' + d.hostname : d.hostname,
+    'Last working': d.last_client || 'none yet', 'Hotspot fallback': fb});
   const hb = $('hotspotbtn');
   hb.textContent = hosting ? 'Leave hotspot' : 'Turn on hotspot';
   hb.onclick = hosting ? leaveHotspot : turnOnHotspot;
+  $('scanbtn').disabled = hosting; hb.disabled = false;
   $('saved').replaceChildren(...d.saved.map(n => {
-    const box = text('div', '', 'svc');
-    box.append(text('strong', n.name + (n.active ? ' (in use)' : n.hotspot ? ' (hotspot)' : '')), text('small', n.ssid));
-    if (!n.active && !n.hotspot) {
-      const row = text('div', '', 'row');
-      const go = text('button', 'Switch');
-      go.onclick = () => connectTo(n.name);
-      const del = text('button', 'Forget');
-      del.onclick = async () => { if (await wifiCall('forget', {name: n.name}, 'Forget ' + n.name + '?')) loadWifi(); };
-      row.append(go, del); box.append(row);
-    }
-    return box;
+    const li = text('li', '', 'item'), info = text('div', '');
+    info.append(text('strong', n.name), ...(n.active ? [text('span', 'in use', 'tag')] : n.hotspot ? [text('span', 'hotspot', 'tag')] : []), text('small', n.ssid));
+    li.append(info);
+    if (!n.active && !n.hotspot) li.append(button('Switch', '', () => connectTo(n.name)),
+      button('Forget', '', async () => { if (await wifiCall('forget', {name: n.name}, 'Forget ' + n.name + '?')) loadWifi(); }));
+    return li;
   }));
   $('keep').hidden = !d.revert_armed;
   if (d.revert_armed) $('keeptext').textContent = 'A network switch is waiting. If you can read this at the new address, keep it; otherwise the previous network returns by itself within ' + d.revert_seconds + ' s.';
-  if (hosting) $('nearby').replaceChildren(text('p', 'Scanning is off in hotspot mode because it would drop the hotspot. Enter the network name by hand below.'));
+  if (hosting || $('nearby').dataset.hosting) $('nearby').replaceChildren(text('p', hosting ? 'Scanning is off in hotspot mode because it would drop the hotspot. Enter the network name by hand under Add a network.' : 'Press Scan nearby to look for networks.', 'small'));
+  $('nearby').dataset.hosting = hosting ? 1 : '';
 }
 async function scan() {
+  $('nearby').replaceChildren(text('p', 'Scanning…', 'small'));
   const r = await fetch('/admin/api/wifi/scan');
-  if (!r.ok) { $('nearby').replaceChildren(text('p', r.status === 409 ? await r.text() : 'Scan failed: ' + await r.text())); return; }
+  if (!r.ok) { $('nearby').replaceChildren(text('p', r.status === 409 ? await r.text() : 'Scan failed: ' + await r.text(), 'small err')); return; }
   const {networks} = await r.json();
-  $('nearby').replaceChildren(...networks.map(n => {
-    const b = text('button', n.ssid + ' · ' + n.signal + '%' + (n.security ? ' · ' + n.security : ' · open'));
-    b.onclick = () => { $('add').ssid.value = n.ssid; $('add').password.focus(); };
-    return b;
+  const ul = text('ul', '', 'list');
+  ul.append(...networks.map(n => {
+    const li = text('li', '', 'item'), info = text('div', '');
+    info.append(text('strong', n.ssid), ...(n.in_use ? [text('span', 'in use', 'tag')] : []), text('small', n.signal + '% · ' + (n.security || 'open')));
+    li.append(info, button('Add', '', () => { $('adddetails').open = true; $('ssid').value = n.ssid; $('wpw').focus(); }));
+    return li;
   }));
+  $('nearby').replaceChildren(networks.length ? ul : text('p', 'No networks found.', 'small'));
+  $('nearby').scrollIntoView({block: 'nearest'});
 }
 async function connectTo(name) {
   const cur = wifiKnown.active || 'no network';
   const res = await wifiCall('connect', {name}, 'Switch Wi-Fi from ' + cur + ' to ' + name + '? This page may stop answering. Unless you press Keep within ' + wifiKnown.revert_seconds + ' s, the Pi goes back to ' + cur + '. If ' + name + ' fails to connect, it goes back at once.');
-  if (!res) return;
-  $('msg').textContent = 'Switched. Open http://' + (res.ip || res.hostname) + '/admin and press Keep this network' + (res.ip ? ' (also ' + res.hostname + ')' : '') + '.';
+  if (!res) return loadWifi();
+  say('wifimsg', 'Switched. Open http://' + (res.ip || res.hostname) + '/admin and press Keep this network' + (res.ip ? ' (also ' + res.hostname + ')' : '') + '.', 'good');
   loadWifi();
 }
 async function turnOnHotspot() {
   const ap = wifiKnown.saved.find(n => n.hotspot);
-  if (!ap) { $('msg').textContent = 'No hotspot profile on this Pi.'; return; }
+  if (!ap) { say('wifimsg', 'No hotspot profile on this Pi.', 'err'); return; }
   const res = await wifiCall('hotspot-on', {}, 'Turn on the hotspot ' + ap.ssid + '? The Pi leaves ' + (wifiKnown.ssid || 'its current network') + ' and this page will stop answering. Join the Wi-Fi ' + ap.ssid + ' on your phone and open http://10.42.0.1/admin. It stays on until you choose Leave hotspot or reboot the Pi.');
-  if (res) $('msg').textContent = 'Hotspot on. Join ' + res.ssid + ' and open ' + res.url;
+  if (res) say('wifimsg', 'Hotspot on. Join ' + res.ssid + ' and open ' + res.url, 'good');
   loadWifi();
 }
 async function leaveHotspot() {
   const last = wifiKnown.last_client;
   const res = await wifiCall('hotspot-off', {}, 'Leave the hotspot and switch to ' + last + '? This page will stop answering. Unless you press Keep within ' + wifiKnown.revert_seconds + ' s at the new address, or if ' + last + ' fails, the Pi goes back to the hotspot.');
-  if (!res) return;
-  $('msg').textContent = 'Switched. Open http://' + (res.ip || res.hostname) + '/admin and press Keep this network.';
+  if (!res) return loadWifi();
+  say('wifimsg', 'Switched. Open http://' + (res.ip || res.hostname) + '/admin and press Keep this network.', 'good');
   loadWifi();
 }
 $('keepbtn').onclick = async () => {
-  if (await wifiCall('keep', {}, 'Keep this network?')) { $('msg').textContent = 'Kept.'; loadWifi(); }
+  if (await wifiCall('keep', {}, 'Keep this network?')) { say('wifimsg', 'Kept.', 'good'); loadWifi(); }
 };
 $('add').onsubmit = async e => {
   e.preventDefault();
   const body = Object.fromEntries(new FormData(e.target));
-  if (await wifiCall('add', body, 'Save ' + body.ssid + '?')) { e.target.reset(); $('msg').textContent = 'Saved. Use Switch to change to it.'; loadWifi(); }
+  if (await wifiCall('add', body, 'Save ' + body.ssid + '?')) { e.target.reset(); $('adddetails').open = false; say('wifimsg', 'Saved. Use Switch to change to it.', 'good'); loadWifi(); }
 };
+$('scanbtn').onclick = scan;
+
+function showStats(s) {
+  const mb = k => bytes(k * 1024), up = Math.floor(s.uptime_s / 60);
+  $('s-load').textContent = s.load1.toFixed(2);
+  $('s-cpu').textContent = Math.round(s.cpu_percent) + '%';
+  $('s-temp').textContent = s.temp_c.toFixed(1) + ' °C';
+  $('s-temp').className = s.temp_c >= 70 ? 'err' : '';
+  $('s-up').textContent = up >= 1440 ? Math.floor(up / 1440) + 'd ' + Math.floor(up % 1440 / 60) + 'h' : Math.floor(up / 60) + 'h ' + up % 60 + 'm';
+  $('s-up').title = Math.floor(up / 1440) + ' d ' + Math.floor(up % 1440 / 60) + ' h ' + up % 60 + ' min';
+  $('s-mem').textContent = mb(s.mem_available_kb) + ' free of ' + mb(s.mem_total_kb);
+  bar('b-mem', s.mem_total_kb - s.mem_available_kb, s.mem_total_kb);
+  $('s-disk').textContent = bytes(s.disk_free) + ' free of ' + bytes(s.disk_total);
+  bar('b-disk', s.disk_total - s.disk_free, s.disk_total);
+  $('updated').textContent = (paused ? 'paused · ' : '') + new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+}
+const when = iso => { const t = new Date(iso); if (isNaN(t)) return String(iso);
+  const m = Math.round((Date.now() - t) / 60000);
+  return t.toLocaleString([], {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) + ' (' + (m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 2880 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago') + ')'; };
+async function loadSystem() {
+  const r = await fetch('/admin/api/system');
+  if (!r.ok) return;
+  const d = await r.json();
+  $('host').textContent = d.hostname || 'Pi';
+  document.title = (d.hostname || 'Pi') + ' admin';
+  const c = d.camera;
+  const state = c.state == null ? 'no status yet' : String(c.state); // c.total is the drive size, not the file count
+  rows('camera', {State: state, 'Last offload': c.last_result == null ? 'none recorded' : String(c.last_result), When: c.updated == null ? 'never' : when(c.updated)});
+  $('c-free').textContent = c.total ? bytes(c.free) + ' free of ' + bytes(c.total) : 'not mounted';
+  bar('b-cam', c.total - c.free, c.total);
+  const addrs = text('span', '');
+  d.addresses.forEach((a, i) => addrs.append(...(i ? [document.createElement('br')] : []), a.ip + ' (' + a.iface + ')'));
+  rows('system', {Hostname: d.hostname, Addresses: d.addresses.length ? addrs : 'none', OS: d.os || 'unknown', Kernel: d.kernel,
+    Architecture: d.arch, 'Hub revision': (d.revision || 'unknown') + (d.modified ? ' (modified)' : ''),
+    Time: new Date(d.time).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'}) + ' ' + d.zone,
+    Booted: d.boot_time ? when(d.boot_time) : 'unknown'});
+}
+let paused = false;
 async function refresh() {
   const r = await fetch('/admin/api/stats');
-  $('login').hidden = r.ok; $('main').hidden = !r.ok;
-  if (!r.ok) return;
-  loadServices(); loadWifi();
-  const s = await r.json();
-  const gb = b => (b / 1e9).toFixed(1) + ' GB', mb = k => Math.round(k / 1024) + ' MB';
-  const up = Math.floor(s.uptime_s / 60);
-  const rows = {Load: s.load1.toFixed(2), Temperature: s.temp_c.toFixed(1) + ' °C',
-    Memory: mb(s.mem_available_kb) + ' free of ' + mb(s.mem_total_kb),
-    Disk: gb(s.disk_free) + ' free of ' + gb(s.disk_total),
-    Uptime: Math.floor(up / 1440) + ' d ' + Math.floor(up % 1440 / 60) + ' h ' + up % 60 + ' min'};
-  $('stats').replaceChildren(...Object.entries(rows).flatMap(([k, v]) => {
-    const dt = document.createElement('dt'), dd = document.createElement('dd');
-    dt.textContent = k; dd.textContent = v; return [dt, dd];
-  }));
+  $('login').hidden = r.ok || r.status !== 401; $('panel').hidden = !r.ok; $('logout').hidden = !r.ok;
+  if (!r.ok) { if (r.status !== 401) { $('login').hidden = true; $('panel').hidden = false; $('updated').textContent = 'stats failed'; } return; }
+  showStats(await r.json());
+  loadServices(); loadWifi(); loadSystem();
 }
+$('refresh').onclick = refresh;
+$('pause').onclick = () => {
+  paused = !paused;
+  $('pause').setAttribute('aria-pressed', paused);
+  $('pause').lastChild.textContent = paused ? 'Resume' : 'Pause';
+  $('pause').firstChild.innerHTML = paused ? '<path d="M7 5l12 7-12 7z"/>' : '<path d="M9 5v14M15 5v14"/>';
+  $('updated').textContent = paused ? 'paused' : '';
+  if (!paused) refresh();
+};
+setInterval(() => paused || document.hidden || refresh(), 5000);
+
 $('login').onsubmit = async e => {
   e.preventDefault();
   const r = await post('/admin/api/login', new URLSearchParams(new FormData(e.target)));
   $('err').textContent = r.ok ? '' : (r.status == 429 ? 'Too many attempts, wait a minute.' : 'Wrong password.');
   e.target.reset(); refresh();
 };
+$('logout').onclick = async () => { await post('/admin/api/logout'); changed.svc = changed.wifi = null; refresh(); };
 document.querySelectorAll('[data-power]').forEach(b => b.onclick = async () => {
   const action = b.dataset.power;
   if (!confirm(action === 'reboot' ? 'Reboot the Pi?' : 'Power off the Pi? It will need to be unplugged to start again.')) return;
   const {nonce} = await (await post('/admin/api/power', JSON.stringify({action}))).json();
   const r = await post('/admin/api/power', JSON.stringify({action, nonce}));
-  $('msg').textContent = r.ok ? 'Done. The Pi is going down.' : 'Failed: ' + await r.text();
+  r.ok ? say('powermsg', 'Done. The Pi is going down.', 'good') : fail('powermsg', r);
 });
-refresh(); setInterval(refresh, 5000);
-$('scanbtn').onclick = scan;
+
+// Password card. The checks mirror the server's (8+ characters, differs, repeats match).
+let pinned = false, hovered = false, focused = false;
+async function syncHint() {
+  const open = pinned || hovered || focused, bulb = $('bulb');
+  if (String(open) === bulb.getAttribute('aria-expanded')) return;
+  bulb.setAttribute('aria-expanded', open); $('hint').hidden = !open;
+  if (!open) return;
+  $('hint').replaceChildren(text('b', 'Hint'), 'loading…');
+  const r = await fetch('/admin/api/hint');
+  const h = r.ok ? (await r.json()).hint : null;
+  $('hint').replaceChildren(text('b', 'Hint'), h == null ? 'could not load the hint' : h || 'No hint set.');
+}
+const bulb = $('bulb');
+bulb.onmouseenter = () => { hovered = true; syncHint(); };
+bulb.onmouseleave = () => { hovered = false; syncHint(); };
+bulb.onfocus = () => { focused = true; syncHint(); };
+bulb.onblur = () => { focused = pinned = false; syncHint(); };
+bulb.onclick = () => { pinned = !pinned; if (!pinned) hovered = focused = false; syncHint(); };
+bulb.onkeydown = e => { if (e.key === 'Escape') { pinned = hovered = focused = false; syncHint(); } };
+function fieldErr(id, msg) { $('e-' + id).textContent = msg; $(id).setAttribute('aria-invalid', !!msg); return !msg; }
+$('pwform').onsubmit = async e => {
+  e.preventDefault();
+  const cur = $('cur').value, n1 = $('new1').value, n2 = $('new2').value, hint = $('hintin').value.trim();
+  say('pwmsg', '');
+  const ok = [fieldErr('cur', cur ? '' : 'Enter the current password.'),
+    fieldErr('new1', [...n1].length < 8 ? 'At least 8 characters.' : n1 === cur ? 'Must differ from the current one.' : ''),
+    fieldErr('new2', n2 !== n1 ? 'Does not match.' : ''),
+    fieldErr('hintin', hint && [cur, n1].some(p => p && hint.toLowerCase().includes(p.toLowerCase())) ? 'The hint must not contain the password.' : '')].every(Boolean);
+  if (!ok) return;
+  const body = {current: cur, new: n1};
+  if (hint) body.hint = hint;
+  const r = await fetch('/admin/api/password', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  if (r.ok) { e.target.reset(); say('pwmsg', 'Password changed. Other sessions were signed out.', 'good'); return; }
+  if (r.status === 401 && (await r.clone().text()).startsWith('wrong current')) return fieldErr('cur', 'Wrong current password.');
+  say('pwmsg', r.status === 429 ? 'Too many attempts. Wait a minute and try again.' : r.status === 401 ? 'Session expired, log in again.' : 'Not changed: ' + (await r.text()).trim(), 'err');
+};
+refresh();
 </script>
 </body>
 </html>
