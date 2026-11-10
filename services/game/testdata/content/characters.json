@@ -1,0 +1,126 @@
+[
+ {
+  "id": "char-00",
+  "name": "Hero 00",
+  "kind": "rider",
+  "clip": "c0.mp4",
+  "poster": "c0.jpg"
+ },
+ {
+  "id": "char-01",
+  "name": "Hero 01",
+  "kind": "dragon",
+  "clip": "c1.mp4",
+  "poster": "c1.jpg"
+ },
+ {
+  "id": "char-02",
+  "name": "Hero 02",
+  "kind": "other"
+ },
+ {
+  "id": "char-03",
+  "name": "Hero 03",
+  "kind": "rider"
+ },
+ {
+  "id": "char-04",
+  "name": "Hero 04",
+  "kind": "dragon"
+ },
+ {
+  "id": "char-05",
+  "name": "Hero 05",
+  "kind": "other"
+ },
+ {
+  "id": "char-06",
+  "name": "Hero 06",
+  "kind": "rider"
+ },
+ {
+  "id": "char-07",
+  "name": "Hero 07",
+  "kind": "dragon"
+ },
+ {
+  "id": "char-08",
+  "name": "Hero 08",
+  "kind": "other"
+ },
+ {
+  "id": "char-09",
+  "name": "Hero 09",
+  "kind": "rider"
+ },
+ {
+  "id": "char-10",
+  "name": "Hero 10",
+  "kind": "dragon"
+ },
+ {
+  "id": "char-11",
+  "name": "Hero 11",
+  "kind": "other"
+ },
+ {
+  "id": "char-12",
+  "name": "Hero 12",
+  "kind": "rider"
+ },
+ {
+  "id": "char-13",
+  "name": "Hero 13",
+  "kind": "dragon"
+ },
+ {
+  "id": "char-14",
+  "name": "Hero 14",
+  "kind": "other"
+ },
+ {
+  "id": "char-15",
+  "name": "Hero 15",
+  "kind": "rider"
+ },
+ {
+  "id": "char-16",
+  "name": "Hero 16",
+  "kind": "dragon"
+ },
+ {
+  "id": "char-17",
+  "name": "Hero 17",
+  "kind": "other"
+ },
+ {
+  "id": "char-18",
+  "name": "Hero 18",
+  "kind": "rider"
+ },
+ {
+  "id": "char-19",
+  "name": "Hero 19",
+  "kind": "dragon"
+ },
+ {
+  "id": "char-20",
+  "name": "Hero 20",
+  "kind": "other"
+ },
+ {
+  "id": "char-21",
+  "name": "Hero 21",
+  "kind": "rider"
+ },
+ {
+  "id": "char-22",
+  "name": "Hero 22",
+  "kind": "dragon"
+ },
+ {
+  "id": "char-23",
+  "name": "Hero 23",
+  "kind": "other"
+ }
+]
