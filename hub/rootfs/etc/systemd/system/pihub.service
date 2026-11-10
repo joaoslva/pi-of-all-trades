@@ -14,6 +14,7 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+StateDirectory=pihub
 
 [Install]
 WantedBy=multi-user.target
