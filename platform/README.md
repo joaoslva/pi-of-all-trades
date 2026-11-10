@@ -1,12 +1,12 @@
 # platform
 
-Everything about the Pi itself, as opposed to the camera app in `app/`.
+Everything about the Pi itself, as opposed to the services in `services/`.
 Hardware specifics belong here, so moving to another board means changing
 this folder.
 
 - `rootfs/` — files mirrored onto the Pi's `/`: the network fallback, cloud-init off
 - `provision/` — getting a fresh SD card to a reachable Pi, then `base.sh`
-- `deploy.sh` — pushes `platform/rootfs/`, `app/rootfs/` and `hub/rootfs/` (run `make -C hub build` first)
+- `deploy.sh` — pushes `platform/rootfs/`, `hub/rootfs/` and every `services/*/rootfs/` (run `make -C hub build` first)
 
 ## Deploying
 
@@ -14,7 +14,7 @@ this folder.
 platform/deploy.sh --list                # what each component ships
 platform/deploy.sh --check               # what differs on the Pi, changes nothing
 platform/deploy.sh                       # install everything
-platform/deploy.sh app                   # install one component
+platform/deploy.sh camera-drive          # install one component
 PI=joao@10.42.0.1 platform/deploy.sh     # another address
 ```
 

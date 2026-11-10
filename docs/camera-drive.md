@@ -95,8 +95,8 @@ packages `python3-flask`, `python3-waitress` and `python3-pil`;
 them and anything only they pulled in, after `apt-get -s purge` shows nothing
 else depends on them. Debian's own `python3` stays.
 
-Deploy changes with `platform/deploy.sh app` from the repo root. It mirrors
-everything under `app/rootfs/` onto the Pi, preserving paths. The network
+Deploy changes with `platform/deploy.sh camera-drive` from the repo root. It mirrors
+everything under `services/camera-drive/rootfs/` onto the Pi, preserving paths. The network
 fallback and the provisioning scripts are in `platform/`.
 
 ## The deletion rule

@@ -23,7 +23,8 @@ file: `docs/adding-a-service.md`.
 ## Layout
 
 ```
-app/        the camera application, one Go binary `camera-drive` (offload, wipe, live, web), systemd units, udev rule (app/rootfs/ mirrors the Pi's /)
+services/   one folder per service, each with its own Go module and rootfs/ mirroring the Pi's /
+  camera-drive/  the camera application, one Go binary `camera-drive` (offload, wipe, live, web), systemd units, udev rule
 hub/        pihub, the Go landing page on port 80 (hub/rootfs/ mirrors the Pi's /; `make -C hub build` first)
 platform/   the Pi itself: deploy.sh, network fallback, provisioning and recovery scripts
 docs/       PLAN.md (the build plan), admin.md, network.md, adding-a-service.md, camera-drive.md (the camera service), history.md (working notes)
@@ -34,7 +35,7 @@ backups/    local data pulled from the Pi, never committed
 
 ```bash
 platform/deploy.sh --check   # what differs on the Pi, changes nothing
-platform/deploy.sh           # install platform/, app/ and hub/
+platform/deploy.sh           # install platform/, hub/ and every services/*/
 ```
 
 Details in `platform/README.md`; how the app works in `docs/camera-drive.md`.

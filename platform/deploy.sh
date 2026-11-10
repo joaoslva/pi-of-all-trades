@@ -4,12 +4,12 @@
 # mirrors the Pi's /:
 #
 #   platform/rootfs/usr/local/bin/foo  ->  /usr/local/bin/foo
-#   app/rootfs/etc/udev/...            ->  /etc/udev/...
+#   services/camera-drive/rootfs/etc/udev/...  ->  /etc/udev/...
 #
 # Usage:
 #   platform/deploy.sh [--list|--check] [--no-reload] [component ...]
 #
-#   component    "platform", "app" or "hub"; default: all three
+#   component    "platform", "hub" or a directory name under services/; default: all
 #   --list       print what each component ships, touch nothing
 #   --check      show what differs on the Pi, change nothing
 #   --no-reload  install without reloading systemd or udev, or restarting
@@ -44,7 +44,9 @@ for arg in "$@"; do
   esac
 done
 
-rootfs_of() { echo "$REPO/$1/rootfs"; }
+# platform and hub live at the top; every other component is services/<name>.
+dir_of() { case "$1" in platform|hub) echo "$REPO/$1" ;; *) echo "$REPO/services/$1" ;; esac; }
+rootfs_of() { echo "$(dir_of "$1")/rootfs"; }
 
 # Paths relative to a rootfs, as they will appear on the Pi.
 files_in() {
@@ -52,7 +54,10 @@ files_in() {
 }
 
 if [ ${#components[@]} -eq 0 ]; then
-  components=(platform app hub)
+  components=(platform hub)
+  for d in "$REPO"/services/*/rootfs; do
+    [ -d "$d" ] && components+=("$(basename "$(dirname "$d")")")
+  done
 fi
 
 roots=()
@@ -62,15 +67,13 @@ for c in "${components[@]}"; do
   roots+=("$r")
 done
 
-# The hub binary is built, not committed.
+# Built binaries are not committed. A component's Makefile names its output in BIN.
 for c in "${components[@]}"; do
-  [ "$c" != hub ] || [ -f "$REPO/hub/rootfs/usr/local/bin/pihub" ] ||
-    die "hub binary missing: run 'make -C hub build' first"
-done
-
-for c in "${components[@]}"; do
-  [ "$c" != app ] || [ -f "$REPO/app/rootfs/usr/local/bin/camera-drive" ] ||
-    die "app binary missing: run 'make -C app build' first"
+  mk="$(dir_of "$c")/Makefile"
+  [ -f "$mk" ] || continue
+  bin="$(sed -n 's/^BIN *= *//p' "$mk" | head -1)"
+  [ -z "$bin" ] || [ -f "$(dir_of "$c")/$bin" ] ||
+    die "$c binary missing: run 'make -C ${mk%/Makefile} build' first"
 done
 
 # Only regular files: the install step below does not handle symlinks,

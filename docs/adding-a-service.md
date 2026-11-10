@@ -1,6 +1,6 @@
 # Adding a service
 
-A service is one JSON file in `hub/rootfs/etc/pihub/services.d/`, one or more systemd units, and (for a web service) one port. Nothing in the hub's Go code changes.
+A service lives in `services/<name>/` (its own Go module, a `Makefile` with `BIN = rootfs/usr/local/bin/<binary>`, and a `rootfs/` mirroring the Pi's `/`). `platform/deploy.sh` finds it by that directory, so deploying needs no script change. Its hub registration is one JSON file in `hub/rootfs/etc/pihub/services.d/`, one or more systemd units, and (for a web service) one port. Nothing in the hub's Go code changes.
 
 ## The JSON file
 
