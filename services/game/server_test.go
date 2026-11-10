@@ -168,7 +168,7 @@ func TestTwoClientGame(t *testing.T) {
 	if end.Reveal == nil || end.Reveal.YourGuess.Name != vb.Secret.Name || end.Reveal.TheirGuess.Name != va.Secret.Name {
 		t.Fatalf("reveal %+v", end.Reveal)
 	}
-	if end.You.Score != 2 || end.Other.Score != 0 {
+	if end.You.Score != 3 || end.Other.Score != 0 {
 		t.Fatalf("scores %+v %+v", end.You, end.Other)
 	}
 	if va.Secret.Clip != "" {

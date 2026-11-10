@@ -284,7 +284,7 @@ func (g *Game) resolve(p *Player, res string, now time.Time) error {
 	p.resolved = res
 	if res == gotIt {
 		remaining := max(g.deadline.Sub(now), 0)
-		p.gain = 1 + int(2*remaining/(RoundSeconds*time.Second))
+		p.gain = 1 + min(2, int(3*remaining/(RoundSeconds*time.Second)))
 	}
 	for _, q := range g.players {
 		if q.resolved == "" {

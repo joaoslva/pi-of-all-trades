@@ -10,7 +10,7 @@ Port 8090, plain HTTP. Binary `guessing-day`. Flags: `-listen :8090`, `-data /va
 - `RoundSeconds = 180`
 - `DefaultRounds = 3`, allowed 1..10
 - name length 1..20 after trimming
-- speed bonus on a correct guess: `floor(2 * remaining / RoundSeconds)`, so 0..2. A correct guess is `1 + bonus` points. A forfeit or timeout is 0.
+- speed bonus on a correct guess: 2 in the first third of the round, 1 in the second, 0 in the last (`min(2, floor(3 * remaining / RoundSeconds))`). A correct guess is `1 + bonus` points. A forfeit or timeout is 0.
 - `ReapAfter = 10 min` with every player disconnected outside the lobby: reset to an empty lobby.
 
 ## Phases

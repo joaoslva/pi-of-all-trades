@@ -123,7 +123,9 @@ func TestScoring(t *testing.T) {
 		{"instant", 0, gotIt, forfeit, 3, 0},
 		{"remaining 91s", 89 * time.Second, gotIt, gotIt, 2, 2},
 		{"remaining 90s", 90 * time.Second, gotIt, gotIt, 2, 2},
-		{"remaining 80s", 100 * time.Second, gotIt, gotIt, 1, 1},
+		{"remaining 130s", 50 * time.Second, gotIt, gotIt, 3, 3},
+		{"remaining 80s", 100 * time.Second, gotIt, gotIt, 2, 2},
+		{"remaining 50s", 130 * time.Second, gotIt, gotIt, 1, 1},
 		{"remaining 1s", 179 * time.Second, gotIt, gotIt, 1, 1},
 		{"forfeit both", 5 * time.Second, forfeit, forfeit, 0, 0},
 	}
@@ -235,7 +237,7 @@ func TestTimeoutInjectedClock(t *testing.T) {
 	if !g.Tick(t0.Add(180 * time.Second)) {
 		t.Fatal("no tick at deadline")
 	}
-	if g.phase != RoundEnd || g.players[1].resolved != forfeit || g.players[1].gain != 0 || g.players[0].Score != 2 {
+	if g.phase != RoundEnd || g.players[1].resolved != forfeit || g.players[1].gain != 0 || g.players[0].Score != 3 {
 		t.Fatalf("after timeout: %s %+v", g.phase, g.players[1])
 	}
 	if !g.NextWake().IsZero() {
