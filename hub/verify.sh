@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Build and deploy the hub, then check the real Pi over SSH.
-# One PASS/FAIL/SKIP line per check; exits non-zero on any FAIL. Reboots the Pi.
+# One PASS/FAIL/SKIP line per check; exits non-zero on any FAIL.
+# Reboots the Pi only when PIHUB_TEST_POWER=1.
 #
 #   hub/verify.sh                    # PI=joao@192.168.1.206 by default
 set -uo pipefail
@@ -34,11 +35,11 @@ read -r -t 20 lock <&"${LOCK[0]}"
 [ "$lock" = locked ] || { echo "FAIL  lock (another verify is running, or the Pi is unreachable)"; exit 1; }
 
 make -C "$REPO/hub" build || { echo "FAIL  build"; exit 1; }
-echo "== deploy --check (before)"; "$REPO/platform/deploy.sh" --check || { echo "FAIL  deploy --check"; exit 1; }
-echo "== deploy"; "$REPO/platform/deploy.sh" || { echo "FAIL  deploy"; exit 1; }
+echo "== deploy --check (before)"; "$REPO/platform/deploy.sh" --check hub || { echo "FAIL  deploy --check"; exit 1; }
+echo "== deploy"; "$REPO/platform/deploy.sh" hub || { echo "FAIL  deploy"; exit 1; }
 # A new unit is not running yet, so deploy.sh does not start it.
 pi 'sudo -n systemctl enable --now pihub.service' >/dev/null 2>&1
-echo "== deploy --check (after)"; "$REPO/platform/deploy.sh" --check
+echo "== deploy --check (after)"; "$REPO/platform/deploy.sh" --check hub
 echo "== checks"
 
 landing_ok() { [ "$(code "http://$HOST/")" = 200 ]; }
@@ -80,7 +81,58 @@ else
   report "camera-live is PartOf camera-drive-web" 1
 fi
 
-if [ -z "${NO_REBOOT:-}" ]; then
+# --- H2: admin login, stats, power. The throwaway password's hash is removed on exit.
+HASH=/etc/pihub/admin.hash
+JAR="$(mktemp)"; trap 'rm -f "$JAR"; pi "sudo -n rm -f $HASH" 2>/dev/null' EXIT
+PW="verify-$RANDOM$RANDOM$RANDOM"
+admin_ok=0
+if pi "test -e $HASH"; then
+  trap 'rm -f "$JAR"' EXIT # not ours: leave the operator's password alone
+  report "admin checks" skip "$HASH already exists, not overwriting it"
+else
+  [ "$(code "http://$HOST/admin")" = 503 ] && report "/admin without a password answers 503" 0 || report "/admin without a password answers 503" 1
+  echo "$PW" | ssh "${SSH_OPTS[@]}" "$PI" "sudo -n /usr/local/bin/pihub passwd" 2>&1 | grep -v '^$'
+  [ "$(code "http://$HOST/admin")" = 200 ] && report "pihub passwd then /admin answers 200" 0 || report "pihub passwd then /admin answers 200" 1
+  w="$(curl -s -o /dev/null -m 10 -w '%{http_code}' -d password=wrong "http://$HOST/admin/api/login")"
+  [ "$w" = 401 ] && report "wrong password gets 401" 0 || report "wrong password gets 401" 1 "got $w"
+  [ "$(code "http://$HOST/admin/api/stats")" = 401 ] && report "stats without cookie gets 401" 0 || report "stats without cookie gets 401" 1
+  start=$(date +%s.%N)
+  r="$(curl -s -o /dev/null -m 10 -c "$JAR" -w '%{http_code}' --data-urlencode "password=$PW" "http://$HOST/admin/api/login")"
+  echo "INFO  login took $(echo "$(date +%s.%N) - $start" | bc) s"
+  if [ "$r" = 204 ] && grep -q HttpOnly "$JAR"; then admin_ok=1; report "login with the password works (HttpOnly cookie)" 0; else report "login with the password works (HttpOnly cookie)" 1 "got $r"; fi
+fi
+if [ "$admin_ok" = 1 ]; then
+  stats="$(curl -s -m 5 -b "$JAR" "http://$HOST/admin/api/stats")"
+  ref="$(pi 'echo $(free -m | awk "/^Mem:/{print \$7}") $(( $(date +%s) - $(date -d "$(uptime -s)" +%s) ))')"
+  if python3 - "$stats" "$ref" <<'PY'
+import json, sys
+s = json.loads(sys.argv[1]); free_mb, up = map(float, sys.argv[2].split())
+within = lambda a, b, slack=0: abs(a - b) <= max(0.05 * b, slack)
+print("INFO  stats", s, "| free -m available", free_mb, "| uptime s", up)
+sys.exit(0 if within(s["mem_available_kb"] / 1024, free_mb, 2) and within(s["uptime_s"], up, 3) and s["temp_c"] > 0 else 1)
+PY
+  then report "stats match free -m and uptime within 5 percent" 0; else report "stats match free -m and uptime within 5 percent" 1; fi
+
+  post() { curl -s -m 10 -b "$JAR" -w ' %{http_code}' -d "$1" "http://$HOST/admin/api/power"; }
+  out="$(post '{"action":"reboot"}')"; nonce="$(sed -n 's/.*"nonce":"\([0-9a-f]*\)".*/\1/p' <<<"$out")"
+  [ -n "$nonce" ] && report "power step one returns a nonce (nothing runs)" 0 || report "power step one returns a nonce (nothing runs)" 1 "$out"
+  # A reused nonce must fail; the confirm below uses a wrong action so nothing reboots.
+  bad="$(post "{\"action\":\"poweroff\",\"nonce\":\"$nonce\"}")"; again="$(post "{\"action\":\"reboot\",\"nonce\":\"$nonce\"}")"
+  case "$bad$again" in *" 400"*" 400") report "spent or reused nonce is rejected" 0 ;; *) report "spent or reused nonce is rejected" 1 "$bad / $again" ;; esac
+  x="$(curl -s -o /dev/null -m 5 -b "$JAR" -H 'Sec-Fetch-Site: cross-site' -d 'x' -w '%{http_code}' "http://$HOST/admin/api/power")"
+  [ "$x" = 403 ] && report "cross-site POST gets 403" 0 || report "cross-site POST gets 403" 1 "got $x"
+fi
+mode="$(pi "stat -c '%a %U:%G' $HASH 2>/dev/null")"
+if [ "$admin_ok" = 1 ]; then
+  case "$mode" in "640 root:joao") report "hash file is 0640 root:joao, not world-readable" 0 ;; *) report "hash file is 0640 root:joao, not world-readable" 1 "$mode" ;; esac
+  n="$(pi "journalctl -u pihub --no-pager | grep -cF '$PW'")"
+  [ "$n" = 0 ] && report "journal has no password text" 0 || report "journal has no password text" 1 "$n lines"
+  rss="$(pi 'awk "/VmRSS/{print \$2}" /proc/$(systemctl show -p MainPID --value pihub)/status')"
+  echo "INFO  pihub VmRSS after admin checks: ${rss:-?} kB"
+  [ -n "$rss" ] && [ "$rss" -lt 23000 ] && report "pihub under 23000 kB" 0 "$rss kB" || report "pihub under 23000 kB" 1 "${rss:-?} kB"
+fi
+
+if [ "${PIHUB_TEST_POWER:-}" = 1 ] && [ -z "${NO_REBOOT:-}" ]; then
 # Never reboot in the middle of an offload.
 idle() { [ -z "$(pi 'systemctl list-units "camera-offload@*" --state=activating,active --no-legend')" ]; }
 wait_for 900 idle || echo "INFO  offload still running after 15 min, rebooting anyway"
@@ -89,7 +141,12 @@ wait_for 900 idle || echo "INFO  offload still running after 15 min, rebooting a
 boot_id() { pi cat /proc/sys/kernel/random/boot_id; }
 before="$(boot_id)"
 had_camera=0; pi lsusb | grep -q '08ca:202[23]' && had_camera=1
-pi 'sudo -n systemctl reboot' >/dev/null 2>&1
+if [ "$admin_ok" = 1 ]; then # reboot from the page, as an operator would
+  n="$(curl -s -m 10 -b "$JAR" -d '{"action":"reboot"}' "http://$HOST/admin/api/power" | sed -n 's/.*"nonce":"\([0-9a-f]*\)".*/\1/p')"
+  curl -s -o /dev/null -m 10 -b "$JAR" -d "{\"action\":\"reboot\",\"nonce\":\"$n\"}" "http://$HOST/admin/api/power"
+else
+  pi 'sudo -n systemctl reboot' >/dev/null 2>&1
+fi
 sleep 15
 if wait_for 180 pi true 2>/dev/null && [ "$(boot_id)" != "$before" ]; then
   both() { [ "$(pi 'systemctl is-active pihub camera-drive-web' | sort -u)" = active ]; }
@@ -97,6 +154,8 @@ if wait_for 180 pi true 2>/dev/null && [ "$(boot_id)" != "$before" ]; then
 else
   report "after reboot pihub and camera-drive-web are active" 1 "Pi did not come back"
 fi
+else
+  report "reboot from the admin page brings the Pi back" skip "set PIHUB_TEST_POWER=1"
 fi
 had_camera=${had_camera:-0}
 

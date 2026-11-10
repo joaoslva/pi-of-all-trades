@@ -1,0 +1,16 @@
+// The hub runs as joao without sudo. It may reboot and power off, nothing else.
+polkit.addRule(function (action, subject) {
+    if (subject.user !== "joao") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var power = [
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.power-off-multiple-sessions",
+        "org.freedesktop.login1.reboot",
+        "org.freedesktop.login1.reboot-multiple-sessions"
+    ];
+    if (power.indexOf(action.id) >= 0) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
