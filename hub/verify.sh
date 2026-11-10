@@ -225,7 +225,7 @@ else
   [ -n "$rss" ] && [ "$rss" -lt 23000 ] && report "pihub under 23000 kB after H3" 0 "$rss kB" || report "pihub under 23000 kB after H3" 1 "${rss:-?} kB"
 fi
 # Leave the Pi as found: camera-live was only started by the switch, not by a camera in live mode.
-[ "$live_before" = active ] || pi 'sudo -n systemctl stop camera-live'
+[ "$live_before" = active ] || pi 'sudo -n systemctl stop camera-live; sudo -n systemctl reset-failed camera-live' # no camera: the start leaves it failed
 echo "INFO  after: camera-drive-web=$(pi 'systemctl is-active camera-drive-web') camera-live=$(pi 'systemctl is-active camera-live')"
 
 
@@ -303,12 +303,12 @@ SH
 #!/bin/sh
 cd $T4
 date +%s.%N > t0
-echo "\$(curl -s -m 90 -b jar -w ' %{http_code}' -d '{"name":"$SSID","nonce":"$nonce"}' $H4/admin/api/wifi/connect)" > connect.out
-date +%s.%N > t_connect_returned
+( echo "\$(curl -s -m 90 -b jar -w ' %{http_code}' -d '{"name":"$SSID","nonce":"$nonce"}' $H4/admin/api/wifi/connect)" > connect.out; date +%s.%N > t_connect_returned ) &
+sleep 0.3
 i=0; : > active.log
 while [ \$i -lt 170 ]; do
   a=\$(nmcli -t -f NAME,DEVICE connection show --active | sed -n 's/:wlan0\$//p')
-  echo "\$(date +%s) \$a" >> active.log
+  echo "\$(date +%s.%N) \$a" >> active.log
   if [ "\$a" = camera-drive-wifi ] && [ \$i -gt 3 ] && [ ! -e /run/pihub/wifi-switching ] && ! systemctl -q is-active pihub-wifi-revert.service; then date +%s.%N > t1; break; fi
   i=\$((i+1)); sleep 1
 done
@@ -329,6 +329,7 @@ SH
     [ "$(pi "nmcli -t -f NAME connection show --active | grep -c '^camera-drive-wifi$'; ls /run/pihub/wifi-switching 2>&1 | grep -c 'No such'")" = "$(printf '1\n1')" ] &&
       report "after the revert: camera-drive-wifi active, flag removed" 0 || report "after the revert: camera-drive-wifi active, flag removed" 1
     seen="$(pi "awk '{print \$2}' $T4/active.log | sort | uniq -c | tr '\n' ' '")"
+    echo "INFO  seconds without camera-drive-wifi on wlan0 during the switch (1 s samples): $(pi "awk '\$2!=\"camera-drive-wifi\"' $T4/active.log | wc -l"); first sample back on it after leaving: $(pi "awk 'NR==FNR{a=\$1;next} \$2!=\"camera-drive-wifi\"{off=\$1} off&&\$2==\"camera-drive-wifi\"{printf \"%.1f s after the connect call\", \$1-a; exit}' $T4/t0 $T4/active.log")"
     echo "INFO  active connection seen each second during the switch: $seen"
     [ -n "$seen" ] && ! grep -q 'camera-drive-ap' <<<"$seen" && report "hotspot never raised while the switch was in flight" 0 "$seen" || report "hotspot never raised while the switch was in flight" 1 "${seen:-no samples}"
     f="$(step4 forget "{\"name\":\"$SSID\"}")"

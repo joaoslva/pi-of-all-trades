@@ -59,7 +59,7 @@ With no active connection there is nothing to return to: no revert, and the flag
 
 | What | Value | Measured |
 |---|---|---|
-| Revert | 60 s | wrong password, client to client: back on `camera-drive-wifi` 66.7 s after the connect call (60 s timer plus about 6 s for the reconnect). See `hub/verify.sh` output. |
+| Revert | 60 s | wrong password, client to client: NetworkManager itself fell back to `camera-drive-wifi` 3.7 s after the connect call (outage about 2 s), so ssh never stayed down. The revert unit finished and removed the flag 66 s after the call (60 s timer plus about 6 s). The revert only matters when NM does not fall back by itself, which this check cannot force. |
 | Switching flag honoured | 90 s | not tuned |
 | Hotspot scan interval | 120 s | not tuned |
 
