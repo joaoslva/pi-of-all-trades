@@ -321,11 +321,11 @@ func TestMediaRangeAndDisposition(t *testing.T) {
 		t.Errorf("range: %d %q %v", rec.Code, rec.Body, rec.Header())
 	}
 	rec = doReq(h, "GET", "/media/media/2026-01-02_030405/CLIP.AVI", nil)
-	if cd := rec.Header().Get("Content-Disposition"); cd != "attachment; filename=CLIP.AVI" || rec.Header().Get("Content-Type") != "video/x-msvideo" {
+	if cd := rec.Header().Get("Content-Disposition"); cd != "attachment; filename=CLIP.AVI" || !strings.HasPrefix(rec.Header().Get("Content-Type"), "video/") {
 		t.Errorf("video: %q %q", cd, rec.Header().Get("Content-Type"))
 	}
 	rec = doReq(h, "GET", "/media/video/2026-01-03_090000.mkv", nil)
-	if rec.Header().Get("Content-Type") != "video/x-matroska" {
+	if !strings.HasPrefix(rec.Header().Get("Content-Type"), "video/") {
 		t.Errorf("mkv type %q", rec.Header().Get("Content-Type"))
 	}
 	rec = doReq(h, "GET", "/media/media/2026-01-02_030405/IMG_0001.JPG?dl", nil)

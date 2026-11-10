@@ -266,6 +266,8 @@ func (c webCfg) apiStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", multipartType)
 	var cur, last, out []byte
 	idle := 0
+	tick := time.NewTicker(c.Poll)
+	defer tick.Stop()
 	for {
 		if frame := c.readLiveFrame(cur); frame != nil && !bytes.Equal(frame, last) {
 			cur, last, idle = last, frame, 0
@@ -279,7 +281,7 @@ func (c webCfg) apiStream(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-time.After(c.Poll):
+		case <-tick.C:
 		}
 	}
 }

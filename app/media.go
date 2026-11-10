@@ -25,10 +25,12 @@ var (
 const thumbPx = 320
 
 func init() {
-	// The system table may lack these; browsers and Go's builtin list do not know them either.
+	// Only where the system table lacks them, so the types match what Python's mimetypes gave on the same box.
 	for ext, typ := range map[string]string{".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
 		".mov": "video/quicktime", ".mp4": "video/mp4"} {
-		mime.AddExtensionType(ext, typ)
+		if mime.TypeByExtension(ext) == "" {
+			mime.AddExtensionType(ext, typ)
+		}
 	}
 }
 

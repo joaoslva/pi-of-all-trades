@@ -307,12 +307,15 @@ if lsusb | grep -q '08ca:2022' && systemctl is-active --quiet camera-live; then
     [ "$h" -lt 61440 ] && report "web: 10 simultaneous streams keep the Go process under 60 MB" 0 "${h} kB" || report "web: 10 simultaneous streams keep the Go process under 60 MB" 1 "${h} kB"
     awk "BEGIN{exit !($min >= 20 && $min >= 0.7 * $max)}" && report "web: no one of 10 streams stalled" 0 "min $min max $max" || report "web: no one of 10 streams stalled" 1 "min $min max $max"
 
-    # CPU of one 10 s stream, Go then Python (utime+stime ticks of the server process, 100 per second)
-    g0=$(ticks $GOPID); curl -sN --max-time 10 -o /dev/null $G/api/stream; g1=$(ticks $GOPID)
-    p0=$(ticks $PYPID); curl -sN --max-time 10 -o /dev/null $P/api/stream; p1=$(ticks $PYPID)
-    gt=$((g1 - g0)); pt=$((p1 - p0))
-    echo "INFO  one 10 s stream: Go $gt ticks, Python $pt ticks"
-    [ $gt -le $pt ] && report "web: CPU during one stream no higher than Python's" 0 "go $gt vs python $pt ticks" || report "web: CPU during one stream no higher than Python's" 1 "go $gt vs python $pt ticks"
+    # CPU of one 10 s stream, Go then Python, median of 3 (utime+stime ticks of the server process, 100 per second)
+    gts=(); pts=()
+    for _ in 1 2 3; do
+      g0=$(ticks $GOPID); curl -sN --max-time 10 -o /dev/null $G/api/stream; gts+=($(($(ticks $GOPID) - g0)))
+      p0=$(ticks $PYPID); curl -sN --max-time 10 -o /dev/null $P/api/stream; pts+=($(($(ticks $PYPID) - p0)))
+    done
+    gt=$(printf '%s\n' "${gts[@]}" | sort -n | sed -n 2p); pt=$(printf '%s\n' "${pts[@]}" | sort -n | sed -n 2p)
+    echo "INFO  one 10 s stream, ticks per trial: Go ${gts[*]}, Python ${pts[*]}"
+    [ $gt -le $pt ] && report "web: CPU during one stream no higher than Python's (median of 3)" 0 "go $gt vs python $pt ticks" || report "web: CPU during one stream no higher than Python's (median of 3)" 1 "go $gt vs python $pt ticks"
   fi
   ctl '{"preview":false,"recording":false}'
   sleep 1
