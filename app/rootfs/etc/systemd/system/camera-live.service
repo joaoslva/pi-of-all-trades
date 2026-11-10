@@ -20,7 +20,7 @@ RuntimeDirectoryPreserve=yes
 ExecStartPre=+/bin/install -d -o joao -g joao -m 0755 /srv/camera-drive/video
 ExecStartPre=+/bin/install -d -o joao -g joao -m 0755 /srv/camera-drive/media/snapshots
 
-ExecStart=/usr/local/bin/camera-live
+ExecStart=/usr/local/bin/camera-drive live
 
 Restart=no
 

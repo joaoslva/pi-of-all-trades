@@ -74,8 +74,8 @@ revert timer BEFORE breaking the network.
 
 ```
 /usr/local/bin/camera-drive        one Go binary; `offload` copies + verifies from the camera (root, udev-triggered),
-                                   `wipe` is the ONLY thing that deletes from the camera
-/usr/local/bin/camera-live         owns the camera in live mode: preview + recording
+                                   `wipe` is the ONLY thing that deletes from the camera,
+                                   `live` owns the camera in live mode: preview + recording
 /usr/local/bin/camera-drive-web    the phone-facing gallery (unprivileged)
 /usr/local/bin/camera-net-fallback keeps the Pi reachable
 

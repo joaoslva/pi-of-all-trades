@@ -6,10 +6,11 @@ import (
 	"os"
 )
 
-// commands maps a subcommand name to its entry point. live and web plug in here.
+// commands maps a subcommand name to its entry point. web plugs in here.
 var commands = map[string]func(args []string) int{
 	"offload": cmdOffload,
 	"wipe":    cmdWipe,
+	"live":    cmdLive,
 }
 
 func main() {
@@ -18,6 +19,6 @@ func main() {
 			os.Exit(cmd(os.Args[2:]))
 		}
 	}
-	fmt.Fprintln(os.Stderr, "usage: camera-drive offload|wipe [args]")
+	fmt.Fprintln(os.Stderr, "usage: camera-drive offload|wipe|live [args]")
 	os.Exit(2)
 }

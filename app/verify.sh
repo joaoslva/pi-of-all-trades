@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build and deploy the app component, then check offload and wipe on the real Pi.
+# Build and deploy the app component, then check offload, wipe and live on the real Pi.
 # One PASS/FAIL/SKIP line per check; exits non-zero on any FAIL. Never reboots.
 #
 # Offload and wipe are exercised on a loop-mounted FAT test image under a temp
@@ -53,6 +53,81 @@ if pi lsusb | grep -q '08ca:2023'; then
     report "real camera is not left mounted" 1 || report "real camera is not left mounted" 0
 else
   report "real camera: camera-offload@ ran once this boot" skip "camera not in storage mode"
+fi
+
+# ---- camera-live (C2) -----------------------------------------------------------
+unit="$(pi 'systemctl cat camera-live.service')"
+grep -q '^ExecStart=/usr/local/bin/camera-drive live$' <<<"$unit" &&
+  report "camera-live.service runs camera-drive live" 0 || report "camera-live.service runs camera-drive live" 1
+grep -q '^KillMode=mixed$' <<<"$unit" && report "camera-live.service keeps KillMode=mixed" 0 ||
+  report "camera-live.service keeps KillMode=mixed" 1
+
+# No camera node: exit 1 with the log line the Python gave. An empty -dev-dir and temp dirs,
+# so this passes whether or not the camera is plugged in and never touches /dev/video0.
+nodev="$(pi 'T=$(mktemp -d /var/tmp/c2-nodev.XXXXXX); /usr/local/bin/camera-drive live -run-dir $T/run -root $T/srv -dev-dir $T/dev -detect-interval 100ms; echo "rc=$?"; rm -rf $T' 2>&1)"
+grep -q 'no camera video device found' <<<"$nodev" && grep -q '^rc=1$' <<<"$nodev" &&
+  report "live with no camera device exits 1 and logs 'no camera video device found'" 0 ||
+  report "live with no camera device exits 1 and logs 'no camera video device found'" 1 "$nodev"
+
+# Real camera in live mode. These record into /srv/camera-drive/video and snapshot into media/snapshots
+# (each check removes only the files it made), and the SIGTERM check stops and restarts the production
+# camera-live. So they only run when asked: REAL_CAMERA=1 app/verify.sh
+if ! pi lsusb | grep -q '08ca:2022'; then
+  for n in "preview reaches live.jpg" "snapshot appears" "three record cycles give three valid files" "SIGTERM mid-recording leaves a valid file"; do
+    report "real camera (live): $n" skip "camera not in live mode (08ca:2022 absent)"
+  done
+elif [ "${REAL_CAMERA:-}" != 1 ]; then
+  report "real camera (live): preview, snapshot, record cycles, SIGTERM" skip "camera is in live mode; set REAL_CAMERA=1 to record with it"
+else
+  out2="$(mktemp)"
+  ssh "${SSH_OPTS[@]}" "$PI" bash -s <<'REMOTE' | tee "$out2"
+set -u
+R=/run/camera-drive; S=/srv/camera-drive
+report() { case "$2" in 0) echo "PASS  $1${3:+ ($3)}";; *) echo "FAIL  $1${3:+ ($3)}";; esac; }
+ctl() { python3 -c 'import json,os,sys;p="/run/camera-drive/control.json";d=json.load(open(p));d[sys.argv[1]]=json.loads(sys.argv[2]);open(p+".tmp","w").write(json.dumps(d));os.replace(p+".tmp",p)' "$1" "$2" </dev/null; }
+rs() { python3 -c 'import json,sys;print(json.load(open("/srv/camera-drive/recstatus.json")).get(sys.argv[1]))' "$1" </dev/null; }
+until_() { local n=$1; shift; for _ in $(seq "$n"); do "$@" && return 0; sleep 0.5; done; return 1; }
+jpg_ok() { [ "$(stat -c %s $R/live.jpg 2>/dev/null || echo 0)" -ge 1024 ] && [ "$(tail -c2 $R/live.jpg | od -An -tx1 | tr -d ' \n')" = ffd9 ]; }
+recording() { [ "$(rs recording)" = True ] && [ "$(rs file)" != None ]; }
+stopped() { [ "$(rs recording)" = False ]; }
+valid() { d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$1" </dev/null 2>/dev/null); [ -n "$d" ] && awk "BEGIN{exit !($d > 0)}"; }
+made=()
+trap 'for f in "${made[@]}"; do rm -f "$f"; done; ctl preview false; ctl recording false' EXIT
+
+until_ 20 pgrep -f 'camera-drive live' >/dev/null || { report "camera-drive live is running" 1; exit 0; }
+ctl preview true
+until_ 40 jpg_ok && report "real camera (live): preview reaches live.jpg" 0 || report "real camera (live): preview reaches live.jpg" 1
+
+prev=$(rs last_snapshot); ctl snapshot_seq "$(python3 -c 'import json;print(json.load(open("/run/camera-drive/control.json"))["snapshot_seq"]+1)' </dev/null)"
+snap_new() { [ "$(rs last_snapshot)" != "$prev" ] && [ "$(rs last_snapshot)" != None ]; }
+if until_ 20 snap_new; then
+  f=$S/media/snapshots/$(rs last_snapshot); made+=("$f")
+  [ "$(head -c2 "$f" | od -An -tx1 | tr -d ' \n')" = ffd8 ] && report "real camera (live): snapshot appears" 0 "$(basename "$f")" || report "real camera (live): snapshot appears" 1 "not a JPEG"
+else report "real camera (live): snapshot appears" 1; fi
+
+ok=0
+for i in 1 2 3; do
+  ctl recording true
+  until_ 60 recording || { echo "INFO  cycle $i never started recording"; continue; }
+  f=$S/video/$(rs file); made+=("$f"); sleep 5
+  ctl recording false
+  until_ 80 stopped; sleep 1
+  valid "$f" && ok=$((ok + 1)) || echo "INFO  cycle $i: $f not valid"
+done
+[ $ok = 3 ] && report "real camera (live): three record cycles give three valid files" 0 || report "real camera (live): three record cycles give three valid files" 1 "$ok of 3"
+
+ctl recording true
+if until_ 60 recording; then
+  f=$S/video/$(rs file); made+=("$f"); sleep 4
+  sudo -n systemctl kill --kill-whom=main -s TERM camera-live
+  until_ 120 bash -c '! systemctl is-active --quiet camera-live'
+  valid "$f" && report "real camera (live): SIGTERM mid-recording leaves a valid file" 0 || report "real camera (live): SIGTERM mid-recording leaves a valid file" 1
+  [ "$(rs state)" = off ] && report "real camera (live): recstatus ends off after SIGTERM" 0 || report "real camera (live): recstatus ends off after SIGTERM" 1 "$(rs state)"
+  sudo -n systemctl start camera-live
+else report "real camera (live): SIGTERM mid-recording leaves a valid file" 1 "recording never started"; fi
+REMOTE
+  fails=$((fails + $(grep -c '^FAIL' "$out2")))
+  rm -f "$out2"
 fi
 
 # ---- loop-image tests, run as root on the Pi ----------------------------------
