@@ -3,7 +3,7 @@ package main
 // camera-drive web is the phone-facing page: state, live view, playback,
 // downloads and wipe. It runs unprivileged and talks to camera-live only
 // through control.json and live.jpg; wipe is a sudo call that enforces its own
-// safety rule. Export and transcoding are not here yet (501).
+// safety rule. Export and transcoding live in export.go.
 
 import (
 	"archive/zip"
@@ -58,10 +58,11 @@ func renderPage(tpl string) string {
 type wipeRunner func(ctx context.Context, flag string) (stdout, stderr string, err error)
 
 type webCfg struct {
-	Listen, Root, Run, FFmpeg, Sudo, WipeBin, USBDir string
-	Poll                                             time.Duration
-	IdleLimit                                        int
-	Wipe                                             wipeRunner // nil: sudo -n WipeBin wipe <flag>
+	Listen, Root, Run, FFmpeg, FFProbe, Sudo, WipeBin, USBDir string
+	Poll                                                      time.Duration
+	IdleLimit                                                 int
+	Wipe                                                      wipeRunner // nil: sudo -n WipeBin wipe <flag>
+	exp                                                       *exporter  // made by handler() when nil
 }
 
 func (c webCfg) liveJPG() string { return filepath.Join(c.Run, "live.jpg") }
@@ -72,6 +73,7 @@ func webFlags(fs *flag.FlagSet) *webCfg {
 	fs.StringVar(&c.Root, "root", "/srv/camera-drive", "data directory")
 	fs.StringVar(&c.Run, "run-dir", "/run/camera-drive", "runtime directory (control.json, live.jpg)")
 	fs.StringVar(&c.FFmpeg, "ffmpeg", "ffmpeg", "ffmpeg program")
+	fs.StringVar(&c.FFProbe, "ffprobe", "ffprobe", "ffprobe program")
 	fs.StringVar(&c.Sudo, "sudo", "sudo", "sudo program")
 	fs.StringVar(&c.WipeBin, "wipe-cmd", "/usr/local/bin/camera-drive", "program run as `sudo -n <wipe-cmd> wipe`")
 	fs.StringVar(&c.USBDir, "usb-dir", "/sys/bus/usb/devices", "sysfs USB device directory")
@@ -87,9 +89,10 @@ func cmdWeb(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: camera-drive web [flags]")
 		return 2
 	}
-	for _, d := range []string{"thumbs", "tmp"} {
+	for _, d := range []string{"thumbs", "tmp", "proxy"} {
 		os.MkdirAll(filepath.Join(cfg.Root, d), 0o755)
 	}
+	cfg.startupCleanup()
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -109,6 +112,9 @@ func cmdWeb(args []string) int {
 }
 
 func (c webCfg) handler() http.Handler {
+	if c.exp == nil {
+		c.exp = newExporter(c)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -123,12 +129,11 @@ func (c webCfg) handler() http.Handler {
 	mux.HandleFunc("GET /media/{rel...}", c.apiMedia)
 	mux.HandleFunc("GET /thumb/{rel...}", c.apiThumb)
 	mux.HandleFunc("POST /api/zip", c.apiZip)
-	notYet := func(w http.ResponseWriter, r *http.Request) {
-		writeJSONResp(w, http.StatusNotImplemented, map[string]any{"ok": false, "error": "export lands in C4"})
-	}
-	mux.HandleFunc("/api/export", notYet)
-	mux.HandleFunc("/api/export/{rest...}", notYet)
-	mux.HandleFunc("/api/mp4/{rel...}", notYet)
+	mux.HandleFunc("GET /api/mp4/{rel...}", c.apiMP4)
+	mux.HandleFunc("POST /api/export", c.apiExportStart)
+	mux.HandleFunc("GET /api/export/{id}", c.apiExportStatus)
+	mux.HandleFunc("DELETE /api/export/{id}", c.apiExportCancel)
+	mux.HandleFunc("GET /api/export/{id}/file", c.apiExportFile)
 	// ServeMux would answer a dirty path with a 301 to the cleaned one; a
 	// traversal attempt gets 404 instead.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

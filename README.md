@@ -10,7 +10,7 @@ no known WiFi around, the Pi raises its own hotspot and serves the same page at
 ## Layout
 
 ```
-app/        the camera application: scripts, systemd units, udev rule (app/rootfs/ mirrors the Pi's /)
+app/        the camera application, one Go binary `camera-drive` (offload, wipe, live, web), systemd units, udev rule (app/rootfs/ mirrors the Pi's /)
 hub/        pihub, the Go landing page on port 80 (hub/rootfs/ mirrors the Pi's /; `make -C hub build` first)
 platform/   the Pi itself: deploy.sh, network fallback, provisioning and recovery scripts
 docs/       camera-drive.md (how it works, what it cost to learn), history.md (working notes)

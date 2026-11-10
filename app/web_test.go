@@ -216,30 +216,6 @@ func TestPowerRouteAbsentAndPageClean(t *testing.T) {
 	}
 }
 
-// The Go page is the Python PAGE minus the power button and its handler.
-func TestPageMatchesPython(t *testing.T) {
-	raw, err := os.ReadFile("rootfs/usr/local/bin/camera-drive-web")
-	if err != nil {
-		t.Skip("Python original is gone (C4 removed it)")
-	}
-	s := string(raw)
-	a := strings.Index(s, `PAGE = r"""`) + len(`PAGE = r"""`)
-	py := s[a : a+strings.Index(s[a:], "\"\"\"\n")]
-	cut := func(from, to string) {
-		i := strings.Index(py, from)
-		j := strings.Index(py[i:], to)
-		if i < 0 || j < 0 {
-			t.Fatalf("python page lacks %q", from)
-		}
-		py = py[:i] + py[i+j:]
-	}
-	cut(`    <button class="tbtn" id="power"`, "  </div>\n  <div class=\"meta\">")
-	cut("document.getElementById('power').onclick", "document.getElementById('wipe').onclick")
-	if renderPage(py) != pagePrepared {
-		t.Error("Go page differs from the Python PAGE beyond the power button and handler")
-	}
-}
-
 func TestWipeWithFakeRunner(t *testing.T) {
 	c, _ := webFixture(t)
 	var flags []string
@@ -266,16 +242,6 @@ func TestWipeWithFakeRunner(t *testing.T) {
 	rec = doReq(c.handler(), "POST", "/api/wipe", strings.NewReader(`{}`))
 	if rec.Code != 500 || !strings.Contains(rec.Body.String(), "timed out") {
 		t.Errorf("runner error: %d %s", rec.Code, rec.Body)
-	}
-}
-
-func TestExportStubs(t *testing.T) {
-	c, _ := webFixture(t)
-	for _, tc := range [][2]string{{"POST", "/api/export"}, {"GET", "/api/export/abc"}, {"DELETE", "/api/export/abc"}, {"GET", "/api/export/abc/file"}, {"GET", "/api/mp4/video/x.mkv"}} {
-		rec := doReq(c.handler(), tc[0], tc[1], nil)
-		if rec.Code != 501 || strings.TrimSpace(rec.Body.String()) != `{"ok": false, "error": "export lands in C4"}` && !jsonEq(rec.Body.String(), `{"ok": false, "error": "export lands in C4"}`) {
-			t.Errorf("%v: %d %s", tc, rec.Code, rec.Body)
-		}
 	}
 }
 

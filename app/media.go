@@ -28,7 +28,7 @@ func init() {
 	// mkv is forced to what Python 3.13's mimetypes says (the system table says x-matroska);
 	// the rest are only filled in where the system table lacks them.
 	mime.AddExtensionType(".mkv", "video/matroska")
-	for ext, typ := range map[string]string{".avi": "video/x-msvideo", ".mov": "video/quicktime", ".mp4": "video/mp4"} {
+	for ext, typ := range map[string]string{".avi": "video/x-msvideo", ".mov": "video/quicktime", ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg", ".zip": "application/zip"} {
 		if mime.TypeByExtension(ext) == "" {
 			mime.AddExtensionType(ext, typ)
 		}

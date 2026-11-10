@@ -75,8 +75,8 @@ revert timer BEFORE breaking the network.
 ```
 /usr/local/bin/camera-drive        one Go binary; `offload` copies + verifies from the camera (root, udev-triggered),
                                    `wipe` is the ONLY thing that deletes from the camera,
-                                   `live` owns the camera in live mode: preview + recording
-/usr/local/bin/camera-drive-web    the phone-facing gallery (unprivileged)
+                                   `live` owns the camera in live mode: preview + recording,
+                                   `web` is the phone-facing gallery and export (unprivileged, :8081)
 /usr/local/bin/camera-net-fallback keeps the Pi reachable
 
 /srv/camera-drive/media/           offloaded photos, in timestamped folders
@@ -87,6 +87,13 @@ revert timer BEFORE breaking the network.
 /srv/camera-drive/index.json       sha256 -> stored path, the "do we already have this" record
 /srv/camera-drive/status.json      last offload result, read by the web UI
 ```
+
+There is no Python in the app any more. A Pi that ran the old scripts still has
+`camera-drive-web`, `camera-live`, `camera-offload`, `camera-wipe` and the
+packages `python3-flask`, `python3-waitress` and `python3-pil`;
+`platform/provision/retire-python.sh` (`--check` first, then `--apply`) removes
+them and anything only they pulled in, after `apt-get -s purge` shows nothing
+else depends on them. Debian's own `python3` stays.
 
 Deploy changes with `platform/deploy.sh app` from the repo root. It mirrors
 everything under `app/rootfs/` onto the Pi, preserving paths. The network
@@ -128,8 +135,9 @@ tabs filter to All / Photos / Videos, each remembering its own choice.
   stored rather than deflated because JPEG does not compress twice.
 - **Light / dark toggle**, remembered in localStorage, defaulting to the system
   preference.
-- **Power button**, which runs a clean `systemctl poweroff`. Use it. Pulling
-  power from a running Pi is the reliable way to corrupt an SD card eventually.
+- No power button here any more: shutting down is on the hub's admin page
+  (`http://<pi>/admin`). Use it. Pulling power from a running Pi is the
+  reliable way to corrupt an SD card eventually.
 
 ## Playing recordings in a browser
 

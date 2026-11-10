@@ -57,6 +57,13 @@ of the three identical NOPASSWD sudo files, locks the admin's empty password
 and lists anything in system paths not owned by root. Reboot afterwards if it
 says so.
 
+`retire-python.sh` — removes the old Python camera scripts and the
+`python3-flask`, `python3-waitress` and `python3-pil` packages (and what only
+they pulled in) once the Go app is deployed. `--check` is the default and only
+prints the plan and the dependency analysis; `--apply` does it and refuses if
+`apt-get -s purge` would remove anything not in the plan. Run it on the Pi
+over ssh, like `base.sh`.
+
 From the first bring-up of camera-drive, kept because they still work:
 
 - `fix-pi-card.sh` — writes the user, SSH key, WiFi profile and
