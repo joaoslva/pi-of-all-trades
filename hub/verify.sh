@@ -324,8 +324,8 @@ SH
     ssh_back=$(( $(date +%s) - t_start ))
     echo "INFO  connect returned: $(pi "cat $T4/connect.out | cut -c1-200")"
     echo "INFO  measured: connect call to Pi back on camera-drive-wifi = ${secs:-?} s; laptop saw ssh answer ${ssh_back} s after the connect call"
-    [ -n "$secs" ] && [ "${secs%.*}" -le 75 ] && report "wrong password: back on camera-drive-wifi within revert (60 s) plus margin" 0 "$secs s" ||
-      report "wrong password: back on camera-drive-wifi within revert (60 s) plus margin" 1 "${secs:-never} s"
+    [ -n "$secs" ] && [ "${secs%.*}" -le 45 ] && report "wrong password: back on camera-drive-wifi within revert (30 s) plus margin" 0 "$secs s" ||
+      report "wrong password: back on camera-drive-wifi within revert (30 s) plus margin" 1 "${secs:-never} s"
     [ "$(pi "nmcli -t -f NAME connection show --active | grep -c '^camera-drive-wifi$'; ls /run/pihub/wifi-switching 2>&1 | grep -c 'No such'")" = "$(printf '1\n1')" ] &&
       report "after the revert: camera-drive-wifi active, flag removed" 0 || report "after the revert: camera-drive-wifi active, flag removed" 1
     seen="$(pi "awk '{print \$2}' $T4/active.log | sort | uniq -c | tr '\n' ' '")"

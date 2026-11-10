@@ -53,13 +53,13 @@ If `nmcli up` fails (wrong password), the revert stays armed and restores the pr
 
 With no active connection there is nothing to return to: no revert, and the flag is removed when the call ends.
 
-`--wifi-revert` (seconds, default 60, allowed 10 to 80). It must stay below the 90 s the fallback honours the flag.
+`--wifi-revert` (seconds, default 30, allowed 10 to 80). It must stay below the 90 s the fallback honours the flag.
 
 ### Values (first guesses, plan "Decisions")
 
 | What | Value | Measured |
 |---|---|---|
-| Revert | 60 s | wrong password, client to client: NetworkManager itself fell back to `camera-drive-wifi` 3.7 s after the connect call (outage about 2 s), so ssh never stayed down. The revert unit finished and removed the flag 66 s after the call (60 s timer plus about 6 s). The revert only matters when NM does not fall back by itself, which this check cannot force. |
+| Revert | 30 s (was 60 s, shortened by the operator) | wrong password, client to client: NetworkManager itself fell back to `camera-drive-wifi` 3.7 s after the connect call (outage about 2 s), so ssh never stayed down. The revert unit finished and removed the flag 66 s after the call (60 s timer plus about 6 s). The revert only matters when NM does not fall back by itself, which this check cannot force. |
 | Switching flag honoured | 90 s | not tuned |
 | Hotspot scan interval | 120 s | not tuned |
 

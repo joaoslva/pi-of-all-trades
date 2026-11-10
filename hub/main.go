@@ -100,7 +100,7 @@ func main() {
 	dir := flag.String("services-dir", "/etc/pihub/services.d", "directory of service JSON files")
 	stateDir := flag.String("state-dir", "/var/lib/pihub", "directory for state.json")
 	hash := flag.String("hash-file", defaultHashFile, "admin password hash file")
-	revert := flag.Int("wifi-revert", 60, "seconds before an unkept Wi-Fi switch is undone (10-80: the fallback ignores the switching flag after 90 s)")
+	revert := flag.Int("wifi-revert", 30, "seconds before an unkept Wi-Fi switch is undone (10-80: the fallback ignores the switching flag after 90 s)")
 	flag.Parse()
 	if *revert < 10 || *revert > 80 {
 		log.Fatal("--wifi-revert must be between 10 and 80")

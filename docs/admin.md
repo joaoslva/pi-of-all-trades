@@ -18,4 +18,4 @@ The Services section lists every service with its class, units and memory (`n/a`
 
 ## Wi-Fi
 
-The Wi-Fi section shows the mode (hotspot or client), the SSID and the address, lists saved networks (Connect, Forget), nearby networks (Scan, client mode only), and an add form. Switching networks arms a revert first; press **Keep this network** at the new address or the Pi goes back to the previous one after `--wifi-revert` seconds (default 60). The hotspot is raised only by the fallback timer, which the page shows read-only and never controls. Details, values and the manual hotspot test: `docs/network.md`.
+The Wi-Fi section shows the mode (hotspot or client), the SSID and the address, lists saved networks (Connect, Forget), nearby networks (Scan, client mode only), and an add form. Switching networks arms a revert first; press **Keep this network** at the new address or the Pi goes back to the previous one after `--wifi-revert` seconds (default 30). The hotspot is raised only by the fallback timer, which the page shows read-only and never controls. Details, values and the manual hotspot test: `docs/network.md`.
