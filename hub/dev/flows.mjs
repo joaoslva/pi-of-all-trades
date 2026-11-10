@@ -128,6 +128,26 @@ try {
   await page.click("#logout");
   await page.waitForSelector("#login:not([hidden])");
   ok(await page.isHidden("#panel"), "Log out returns to the login form");
+  // The theme toggle, on both pages. A fresh browser context starts on the light system setting.
+  for (const path of ["/", "/admin"]) {
+    const t = await openPage(base + path);
+    try {
+      await t.page.goto(base + path);
+      const bg = () => t.page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      const light = await bg();
+      await t.page.click("#themebtn");
+      const dark = await t.page.evaluate(() => document.documentElement.dataset.theme);
+      ok(dark === "dark" && (await bg()) !== light, `${path}: the toggle switches the light system theme to dark`);
+      await t.page.reload();
+      ok((await t.page.evaluate(() => document.documentElement.dataset.theme)) === "dark", `${path}: the choice survives a reload`);
+      if (path === "/") await t.page.screenshot({ path: join(shots, "flow-theme-toggled-dark.png") });
+      await t.page.click("#themebtn");
+      ok((await bg()) === light, `${path}: a second press returns to light`);
+      ok((await t.page.getAttribute("#themebtn", "aria-label")) === "Switch to dark theme", `${path}: the toggle label follows the theme`);
+    } finally {
+      await t.browser.close();
+    }
+  }
   const real = problems.filter(p => !/status of (401|400|429|500)/.test(p));
   ok(real.length === 0, "no page errors" + (real.length ? ": " + real.join("; ") : ""));
 } catch (e) {

@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-//go:embed web/index.html web/theme.css
+//go:embed web/index.html web/theme.css web/theme.js
 var webFS embed.FS
 
 //go:embed web/admin.html
@@ -41,6 +41,7 @@ func newHandler(services []Service, auth *Auth, ctl *Control, wifi *Wifi) http.H
 	mux := http.NewServeMux()
 	hostname, _ := os.Hostname()
 	mux.HandleFunc("GET /theme.css", func(w http.ResponseWriter, r *http.Request) { http.ServeFileFS(w, r, webFS, "web/theme.css") })
+	mux.HandleFunc("GET /theme.js", func(w http.ResponseWriter, r *http.Request) { http.ServeFileFS(w, r, webFS, "web/theme.js") })
 	mux.HandleFunc("GET /admin", auth.adminPage)
 	mux.HandleFunc("POST /admin/api/login", auth.login)
 	mux.HandleFunc("POST /admin/api/logout", auth.logout)

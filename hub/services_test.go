@@ -68,3 +68,13 @@ func TestIndexHref(t *testing.T) {
 		t.Fatalf("camera link missing:\n%s", body)
 	}
 }
+
+func TestThemeAssets(t *testing.T) {
+	for path, want := range map[string]string{"/theme.css": "text/css", "/theme.js": "text/javascript"} {
+		rec := httptest.NewRecorder()
+		newHandler(nil, NewAuth(""), nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 200 || !strings.HasPrefix(rec.Header().Get("Content-Type"), want) {
+			t.Fatalf("%s: %d %q", path, rec.Code, rec.Header().Get("Content-Type"))
+		}
+	}
+}

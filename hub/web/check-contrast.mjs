@@ -12,8 +12,13 @@ function tokens(block) {
   return out;
 }
 const light = tokens(css.match(/:root\s*{([^}]*)}/)[1]);
-const darkBlock = css.match(/prefers-color-scheme:\s*dark\)\s*{\s*:root\s*{([^}]*)}/);
-const themes = { light, dark: { ...light, ...tokens(darkBlock[1]) } };
+const darkMedia = tokens(css.match(/prefers-color-scheme:\s*dark\)\s*{\s*:root:not\(\[data-theme="light"\]\)\s*{([^}]*)}/)[1]);
+const darkForced = tokens(css.match(/:root\[data-theme="dark"\]\s*{([^}]*)}/)[1]);
+if (JSON.stringify(Object.entries(darkMedia).sort()) !== JSON.stringify(Object.entries(darkForced).sort())) {
+  console.log("FAIL  the dark tokens for the system setting and for the toggle differ");
+  process.exit(1);
+}
+const themes = { light, dark: { ...light, ...darkMedia } };
 
 const lum = hex => {
   const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)

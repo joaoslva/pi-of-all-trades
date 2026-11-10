@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pi admin</title>
 <link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
 <style>
   :root { font-size: 14px; }
   body { display: flex; flex-direction: column; min-height: 100vh; }
@@ -59,7 +60,8 @@
   .tag { display: inline-block; font-size: .74rem; padding: 0 6px; margin-left: 4px; border-radius: 6px; border: 1px solid var(--field); color: var(--muted); vertical-align: 1px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; border: 2px solid var(--danger-ink); }
   .dot.on { background: var(--ok); border-color: var(--ok); }
-  .on-t { color: var(--ok); font-weight: 600; } .off-t { color: var(--danger-ink); font-weight: 600; }
+  .dot.idle { border-color: var(--field); }
+  .on-t { color: var(--ok); font-weight: 600; } .off-t { color: var(--danger-ink); font-weight: 600; } .idle-t { color: var(--muted); font-weight: 600; }
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .tile { background: var(--sunk); border-radius: 10px; padding: 6px 8px; }
   .tile b { display: block; font-size: 1.1rem; font-weight: 650; white-space: nowrap; }
@@ -93,6 +95,7 @@
 <a class="skip" href="#main">Skip to content</a>
 <header class="bar">
   <h1><span id="host">Pi</span> <span>admin</span></h1>
+  <button class="themebtn" id="themebtn" type="button" aria-label="Switch to dark theme"><svg class="i moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg><svg class="i sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
   <a href="/"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>Services</a>
   <button id="logout" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Log out</button>
 </header>
@@ -211,12 +214,13 @@ async function loadServices() {
   $('warnings').replaceChildren(...d.warnings.map(w => { const b = text('p', ' ' + w.message, 'banner'); b.prepend(text('strong', 'Warning:')); return b; }));
   $('services').replaceChildren(...services.map(s => {
     const li = text('li', '', 'item');
-    const dot = text('span', '', 'dot' + (s.running ? ' on' : ''));
+    const quiet = !s.running && s.class === 'background'; // an event-driven job waiting for its trigger is not broken
+    const dot = text('span', '', 'dot' + (s.running ? ' on' : quiet ? ' idle' : ''));
     const info = text('div', '');
     const name = text('strong', s.name);
     const mem = s.memory_bytes == null ? '' : ' · ' + bytes(s.memory_bytes);
     const detail = text('small', '');
-    detail.append(text('span', s.running ? 'Running' : 'Stopped', s.running ? 'on-t' : 'off-t'),
+    detail.append(text('span', s.running ? 'Running' : quiet ? 'Idle' : 'Stopped', s.running ? 'on-t' : quiet ? 'idle-t' : 'off-t'),
       mem + ' · ' + s.units.map(u => u.unit + ' ' + u.state).join(', '));
     info.append(name, text('span', s.class, 'tag'), detail);
     li.append(dot, info);
