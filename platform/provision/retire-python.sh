@@ -51,9 +51,9 @@ if [ ${#have[@]} = 0 ]; then
 fi
 
 # Orphans after the purge, from apt's own "no longer required" list, kept only if they are
-# in the dependency closure of the three: so this never takes anything that was already
+# in the Depends+Recommends closure of the three: so this never takes anything that was already
 # orphaned for another reason.
-closure=$(apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces --no-enhances --installed "${have[@]}" 2>/dev/null | grep -E '^[a-z0-9]' | sort -u)
+closure=$(apt-cache depends --recurse --no-suggests --no-conflicts --no-breaks --no-replaces --no-enhances --installed "${have[@]}" 2>/dev/null | grep -E '^[a-z0-9]' | sort -u)
 orphans=$(apt-get -s purge "${have[@]}" 2>/dev/null | awk '/no longer required:/{f=1;next} f&&/^ /{for(i=1;i<=NF;i++)print $i;next} {f=0}' | sort -u)
 mine=$(comm -12 <(echo "$closure") <(echo "$orphans"))
 plan=$(printf '%s\n' "${have[@]}" $mine | sort -u)

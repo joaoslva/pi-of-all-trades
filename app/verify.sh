@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build and deploy the app component, then check offload, wipe, live and the web read side on the real Pi.
+# Build and deploy the app component, then check offload, wipe, live, the web app and its export on the real Pi.
 # One PASS/FAIL/SKIP line per check; exits non-zero on any FAIL. Never reboots.
 #
 # Offload and wipe are exercised on a loop-mounted FAT test image under a temp
@@ -15,6 +15,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PI="${PI:-joao@192.168.1.206}"
 KEY="${KEY:-$HOME/.ssh/pi_camera_drive}"
 PYREF="${PYREF:-65c643e}" # last commit that still has the Python camera-offload and camera-wipe
+WEBREF="${WEBREF:-42ae7f1}" # last commit that still has the Python camera-drive-web
+LIVEREF="${LIVEREF:-dd3dae6^}" # last commit that still has the Python camera-live
 SSH_OPTS=(-i "$KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes)
 pi() { ssh "${SSH_OPTS[@]}" "$PI" "$@" </dev/null; }
 
@@ -130,32 +132,45 @@ REMOTE
   rm -f "$out2"
 fi
 
-# ---- web read side (C3): Go on :8082 beside the production Python on :8081 -----------
-# Read-only against /srv/camera-drive (thumbs are made in a scratch root). Never calls /api/wipe,
-# /api/power or an export route except to see the 501 stub. The only state touched is
-# control.json (preview on, then back to all-false) and only when the camera is in live mode.
+# ---- web read side (C3): Go on :8082 beside a copy of the Python app on :8084 --------------
+# Since C4 the production unit is the Go app on :8081, so the Python original is run from git
+# (WEBREF) with its ROOT rewritten to a scratch dir of symlinks to the real media. Read-only against
+# /srv/camera-drive (thumbs, proxies and tmp are made in scratch roots). Never calls /api/wipe or an
+# export route that encodes. The only state touched is control.json (preview on, then back to
+# all-false) and only when the camera is in live mode.
+W3="$(pi mktemp -d /var/tmp/c4-ref.XXXXXX)" || { echo "FAIL  cannot reach Pi"; exit 1; }
+git -C "$REPO" show "$WEBREF:app/rootfs/usr/local/bin/camera-drive-web" | ssh "${SSH_OPTS[@]}" "$PI" "cat > $W3/web.py"
+git -C "$REPO" show "$LIVEREF:app/rootfs/usr/local/bin/camera-live" | ssh "${SSH_OPTS[@]}" "$PI" "cat > $W3/live.py"
 out3="$(mktemp)"
-ssh "${SSH_OPTS[@]}" "$PI" bash -s <<'REMOTE' | tee "$out3"
+ssh "${SSH_OPTS[@]}" "$PI" bash -s -- "$W3" <<'REMOTE' | tee "$out3"
 set -u
+W3=$1
 GO=/usr/local/bin/camera-drive
 T=$(mktemp -d /var/tmp/c3-verify.XXXXXX)
-G=http://127.0.0.1:8082; P=http://127.0.0.1:8081
-GOPID=""
+G=http://127.0.0.1:8082; P=http://127.0.0.1:8084
+GOPID=""; PYPID=""
 report() { case "$2" in 0) echo "PASS  $1${3:+ ($3)}";; skip) echo "SKIP  $1${3:+ ($3)}";; *) echo "FAIL  $1${3:+ ($3)}";; esac; }
 check() { local n=$1; shift; if "$@"; then report "$n" 0; else report "$n" 1; fi; }
 startgo() { # startgo [extra flags]: Go web on :8082 as joao, pid recorded
-  nohup $GO web --listen 127.0.0.1:8082 "$@" >$T/go.log 2>&1 & GOPID=$!
+  nohup $GO web --listen 127.0.0.1:8082 --root $T/gor "$@" >$T/go.log 2>&1 & GOPID=$!
   for _ in $(seq 50); do curl -s -o /dev/null $G/api/live.jpg && return 0; sleep 0.1; done; return 1
 }
 stopgo() { [ -n "$GOPID" ] && kill $GOPID 2>/dev/null; wait $GOPID 2>/dev/null; GOPID=""; }
 ctl() { curl -s -X POST -H 'Content-Type: application/json' -d "$1" $G/api/control >/dev/null; }
-cleanup() { [ -n "$GOPID" ] && { ctl '{"preview":false,"recording":false}'; kill $GOPID 2>/dev/null; }; rm -rf $T; }
+cleanup() { [ -n "$GOPID" ] && { ctl '{"preview":false,"recording":false}'; kill $GOPID 2>/dev/null; }; [ -n "$PYPID" ] && kill $PYPID 2>/dev/null; rm -rf $T; }
 trap cleanup EXIT
 rss() { awk '/^VmRSS/{print $2}' /proc/$1/status; }
 hwm() { awk '/^VmHWM/{print $2}' /proc/$1/status; }
 ticks() { awk '{print $14+$15}' /proc/$1/stat; }
-PYPID=$(systemctl show -p MainPID --value camera-drive-web)
 frames() { grep -ac '^--frame' "$1"; }
+
+# scratch roots shaped like /srv/camera-drive: the real media and state files by symlink, own proxy/thumbs/tmp
+for r in pyroot gor; do mkdir -p $T/$r; for x in media video status.json recstatus.json index.json; do ln -s /srv/camera-drive/$x $T/$r/$x; done; done
+sed "s#^ROOT = Path(\"/srv/camera-drive\")#ROOT = Path(\"$T/pyroot\")#" $W3/web.py > $T/web-py.py
+grep -q "^ROOT = Path(\"$T/pyroot\")" $T/web-py.py && ! grep -q '^ROOT = Path("/srv' $T/web-py.py || { report "python reference copy has its ROOT rewritten" 1; exit; }
+PORT=8084 nohup python3 $T/web-py.py >$T/py.log 2>&1 & PYPID=$!
+for _ in $(seq 100); do curl -s -o /dev/null $P/api/state && break; sleep 0.1; done
+curl -s -o /dev/null $P/api/state || { report "python reference starts on :8084" 1 "$(cat $T/py.log)"; exit; }
 
 cat > $T/a.py <<'PY'
 import hashlib, http.client, io, json, struct, sys, zipfile, urllib.parse
@@ -180,7 +195,7 @@ for _ in range(2):
     if {k: v for k, v in a.items() if k not in VARY} == {k: v for k, v in b.items() if k not in VARY}: break
     a, b = state(G), state(P)
 same = json.dumps({k: v for k, v in a.items() if k not in VARY}, sort_keys=True) == json.dumps({k: v for k, v in b.items() if k not in VARY}, sort_keys=True)
-rep("web: /api/state equal to Python (sorted keys, bar disk)", same,
+rep("web: /api/state equal to the Python original (sorted keys, bar disk)", same,
     f"{len(a['dumps'])} dumps, {len(a['captures'])} days, held={a['held']}, camera={a['camera']}")
 rep("web: disk keys and total agree", set(a["disk"]) == set(b["disk"]) and a["disk"]["total"] == b["disk"]["total"])
 if not same:
@@ -224,10 +239,10 @@ for label, rel in (("image", imgs[0]), ("video", vids[-1])):
     w = jpeg_width(data)
     rep(f"web: thumbnail of one {label} is a JPEG of width 320", st == 200 and w == 320 and h.get("cache-control") == "max-age=86400", f"{rel} status={st} width={w}")
 
-# 501 stubs, absent power route, page
-for m, p in (("POST", "/api/export"), ("GET", "/api/mp4/" + vids[-1]), ("GET", "/api/export/x/file")):
-    st, h, data = req(G, m, p, b"{}" if m == "POST" else None, {"Content-Type": "application/json"})
-    rep(f"web: {m} {p.split('/')[1]}/{p.split('/')[2]} is the 501 stub", st == 501 and json.loads(data) == {"ok": False, "error": "export lands in C4"})
+# export routes are real now. Nothing here starts an encode: unknown jobs and bad input only.
+codes = [req(G, "GET", "/api/export/x")[0], req(G, "DELETE", "/api/export/x")[0], req(G, "GET", "/api/export/x/file")[0],
+         req(G, "POST", "/api/export", b"{}", {"Content-Type": "application/json"})[0], req(G, "GET", "/api/mp4/" + imgs[0])[0]]
+rep("web: export routes answer for real, no 501 (unknown job 404 x3, empty POST 400, mp4 of a photo 400)", codes == [404, 404, 404, 400, 400], str(codes))
 rep("web: no /api/power route (POST and GET 404)", req(G, "POST", "/api/power", b"")[0] == 404 and req(G, "GET", "/api/power")[0] == 404)
 st, h, page = req(G, "GET", "/")
 rep("web: / serves the page without a power button or __ICON__ placeholder", st == 200 and b'id="power"' not in page and b"/api/power" not in page and b"__ICON" not in page and h["content-type"].startswith("text/html"))
@@ -269,7 +284,6 @@ if startgo; then
   python3 $T/a.py $G $P http://127.0.0.1:8083
 else report "web: Go app starts on :8082" 1 "$(cat $T/go.log)"; fi
 kill $TPID 2>/dev/null; wait $TPID 2>/dev/null
-check "web: unit file untouched, Python still serves :8081" bash -c "curl -s -o /dev/null -w '%{http_code}' $P/api/state | grep -q 200 && systemctl cat camera-drive-web | grep -q camera-drive-web"
 
 # /api/play: multipart frames, ffmpeg gone after the client leaves
 vid=video/2026-08-17_175004.mkv
@@ -338,6 +352,187 @@ stopgo
 REMOTE
 fails=$((fails + $(grep -c '^FAIL' "$out3")))
 rm -f "$out3"
+
+# ---- cutover and export (C4) ----------------------------------------------------------------
+# Production is the Go app on :8081 now. Export is exercised on scratch Go instances (:8085) whose root
+# holds symlinks to the real media/video and its own proxy, thumbs and tmp, so nothing is written under
+# /srv/camera-drive. The Python original (WEBREF, ROOT rewritten) runs on :8084 as the timing reference.
+# Encodes are skipped, not run, while the camera is previewing or recording.
+out4="$(mktemp)"
+ssh "${SSH_OPTS[@]}" "$PI" bash -s -- "$W3" <<'REMOTE' | tee "$out4"
+set -u
+W3=$1
+GO=/usr/local/bin/camera-drive
+T=$(mktemp -d /var/tmp/c4-verify.XXXXXX)
+X=http://127.0.0.1:8085; P=http://127.0.0.1:8084
+XPID=""; PYPID=""; PLPID=""
+report() { case "$2" in 0) echo "PASS  $1${3:+ ($3)}";; skip) echo "SKIP  $1${3:+ ($3)}";; *) echo "FAIL  $1${3:+ ($3)}";; esac; }
+check() { local n=$1; shift; if "$@"; then report "$n" 0; else report "$n" 1; fi; }
+cleanup() { for p in $XPID $PYPID $PLPID; do kill $p 2>/dev/null; done; pkill -x ffmpeg-x 2>/dev/null; rm -rf $T; }
+trap cleanup EXIT
+rss() { awk '/^VmRSS/{print $2}' /proc/$1/status; }
+median() { sort -n | sed -n 2p; }
+mkdir -p $T/bin; ln -s "$(command -v ffmpeg)" $T/bin/ffmpeg-x
+
+# -- production after the cutover deploy
+es="$(systemctl show camera-drive-web -p ExecStart)"
+grep -q 'argv\[\]=/usr/local/bin/camera-drive web --listen 0.0.0.0:8081' <<<"$es" && report "camera-drive-web.service ExecStart names camera-drive web --listen 0.0.0.0:8081" 0 ||
+  report "camera-drive-web.service ExecStart names camera-drive web --listen 0.0.0.0:8081" 1 "$es"
+! systemctl cat camera-drive-web | grep -q '^Environment=PORT' && report "unit has no Environment=PORT" 0 || report "unit has no Environment=PORT" 1
+WEBPID=$(systemctl show -p MainPID --value camera-drive-web)
+systemctl is-active --quiet camera-drive-web && [ "$(tr '\0' ' ' </proc/$WEBPID/cmdline)" = "/usr/local/bin/camera-drive web --listen 0.0.0.0:8081 " ] &&
+  report "camera-drive-web is active and its process is the Go binary" 0 "pid $WEBPID" || report "camera-drive-web is active and its process is the Go binary" 1
+[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/api/state)" = 200 ] && curl -s http://127.0.0.1:8081/api/state | python3 -c 'import json,sys;d=json.load(sys.stdin);assert "dumps" in d and "camera" in d' &&
+  report "/api/state answers on :8081" 0 || report "/api/state answers on :8081" 1
+pg=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' http://127.0.0.1:8081/)
+[ "${pg%% *}" = 200 ] && curl -s http://127.0.0.1:8081/ | grep -q 'id="selfmt"\|FORMATS' && report "the camera page loads from :8081 (HTML fetched; not looked at in a browser)" 0 "$pg" || report "the camera page loads from :8081" 1 "$pg"
+py=""
+for u in camera-drive-web camera-live; do
+  cg=$(systemctl show -p ControlGroup --value $u); for pid in $(cat /sys/fs/cgroup$cg/cgroup.procs 2>/dev/null); do
+    tr '\0' ' ' </proc/$pid/cmdline | grep -qi 'python' && py="$py $u:$pid"; done
+done
+pgrep -af 'python' | grep -E '/usr/local/bin/camera|pihub' >/dev/null && py="$py (a python process names our binaries)"
+[ -z "$py" ] && report "no python3 process belongs to camera-drive-web or camera-live" 0 || report "no python3 process belongs to camera-drive-web or camera-live" 1 "$py"
+
+# -- python reference and the scratch Go instance
+for r in pyroot xroot; do mkdir -p $T/$r; for x in media video status.json recstatus.json index.json; do ln -s /srv/camera-drive/$x $T/$r/$x; done; done
+sed "s#^ROOT = Path(\"/srv/camera-drive\")#ROOT = Path(\"$T/pyroot\")#" $W3/web.py > $T/web-py.py
+grep -q "^ROOT = Path(\"$T/pyroot\")" $T/web-py.py && ! grep -q '^ROOT = Path("/srv' $T/web-py.py || { report "python reference copy has its ROOT rewritten" 1; exit; }
+xstart() { nohup $GO web --listen 127.0.0.1:8085 --root $T/xroot --ffmpeg $T/bin/ffmpeg-x >>$T/x.log 2>&1 & XPID=$!
+  for _ in $(seq 50); do curl -s -o /dev/null $X/api/live.jpg && return 0; sleep 0.1; done; return 1; }
+xstart || { report "scratch Go instance starts on :8085" 1 "$(cat $T/x.log)"; exit; }
+
+# -- memory at idle: pihub + camera-drive web + camera-drive live vs the Python web app + Python camera-live
+LIVEPID=$(systemctl show -p MainPID --value camera-live); HUBPID=$(systemctl show -p MainPID --value pihub)
+sed -e "s#^RUN = Path(\"/run/camera-drive\")#RUN = Path(\"$T/pylive-run\")#" -e "s#^ROOT = Path(\"/srv/camera-drive\")#ROOT = Path(\"$T/pylive-srv\")#" $W3/live.py > $T/live-py.py
+mkdir -p $T/pylive-run $T/pylive-srv/video $T/pylive-srv/media/snapshots
+! grep -q '^\(RUN\|ROOT\) = Path("/\(run\|srv\)/camera-drive' $T/live-py.py && echo "INFO  python camera-live copy rewritten to scratch paths" || { report "python camera-live copy has its RUN/ROOT rewritten" 1; exit; }
+PORT=8084 nohup python3 $T/web-py.py >$T/py.log 2>&1 & PYPID=$!
+nohup python3 $T/live-py.py >$T/pylive.log 2>&1 & PLPID=$!
+for _ in $(seq 100); do curl -s -o /dev/null $P/api/state && break; sleep 0.1; done
+sleep 4
+if kill -0 $PLPID 2>/dev/null && kill -0 $PYPID 2>/dev/null; then
+  ours=$(( $(rss $HUBPID) + $(rss $WEBPID) + $(rss $LIVEPID) )); theirs=$(( $(rss $PYPID) + $(rss $PLPID) ))
+  echo "INFO  idle RSS kB: pihub $(rss $HUBPID) + web $(rss $WEBPID) + live $(rss $LIVEPID) = $ours; python web $(rss $PYPID) + python live $(rss $PLPID) = $theirs"
+  awk "BEGIN{exit !($ours <= 0.6 * $theirs)}" && report "idle resident memory of our processes <= 60% of the Python-era pair" 0 "$ours kB vs $theirs kB, $(awk "BEGIN{printf \"%.0f\", 100*$ours/$theirs}")%" ||
+    report "idle resident memory of our processes <= 60% of the Python-era pair" 1 "$ours kB vs $theirs kB"
+else
+  report "idle resident memory vs Python-era pair" 1 "python camera-live copy did not stay up: $(tail -3 $T/pylive.log)"
+fi
+kill $PLPID 2>/dev/null; PLPID=""
+
+cat > $T/exp.py <<'PY'
+import http.client, json, sys, time, urllib.parse
+def call(base, method, path, body=None):
+    u = urllib.parse.urlparse(base); c = http.client.HTTPConnection(u.hostname, u.port, timeout=300)
+    c.request(method, path, json.dumps(body) if body is not None else None, {"Content-Type": "application/json"})
+    r = c.getresponse(); d = r.read(); c.close(); return r.status, d
+cmd, base = sys.argv[1], sys.argv[2]
+if cmd == "start":
+    print(json.loads(call(base, "POST", "/api/export", {"format": sys.argv[3], "paths": sys.argv[4:]})[1])["id"])
+elif cmd == "state":
+    print(json.loads(call(base, "GET", "/api/export/" + sys.argv[3])[1])["state"])
+elif cmd == "cancel":
+    print(call(base, "DELETE", "/api/export/" + sys.argv[3])[0])
+elif cmd == "run":  # run BASE FMT REL OUT: seconds from POST to done, then the file saved to OUT
+    t0 = time.time(); jid = json.loads(call(base, "POST", "/api/export", {"format": sys.argv[3], "paths": [sys.argv[4]]})[1])["id"]
+    while True:
+        s = json.loads(call(base, "GET", "/api/export/" + jid)[1])
+        if s["state"] != "running": break
+        time.sleep(0.2)
+    el = time.time() - t0
+    if s["state"] == "done": open(sys.argv[5], "wb").write(call(base, "GET", "/api/export/" + jid + "/file")[1])
+    print("%.2f %s" % (el, s["state"]))
+PY
+streams() { ffprobe -v error -show_entries stream=codec_name,width,height -of csv=p=0 "$1" | sort | tr '\n' ' '; }
+dur() { ffprobe -v error -show_entries format=duration -of csv=p=0 "$1"; }
+ffn() { pgrep -xc ffmpeg-x; }
+
+if grep -Eq '"(preview|recording)": ?true' /run/camera-drive/control.json 2>/dev/null; then
+  for n in "30 s MP4 same codec/size/duration as Python, MOV/WebM/MP3 probe valid" "MP4 export time vs Python" "two exports run one ffmpeg at a time" "cancel leaves no ffmpeg and no partial file" "restart mid-export cleans export-*"; do
+    report "export: $n" skip "camera is previewing or recording"; done
+  exit
+fi
+# the recording closest to 30 s
+vid=""; best=999999
+for f in /srv/camera-drive/video/*.mkv; do
+  d=$(dur "$f" 2>/dev/null); [ -n "$d" ] || continue
+  df=$(awk "BEGIN{x=$d-30; if(x<0)x=-x; print x}"); awk "BEGIN{exit !($df < $best)}" && { best=$df; vid=video/$(basename "$f"); vd=$d; }
+done
+[ -n "$vid" ] || { report "export: a recording to export" skip "no .mkv in /srv/camera-drive/video"; exit; }
+echo "INFO  exporting $vid, $vd s ($(stat -c %s /srv/camera-drive/$vid) bytes)"
+
+# -- timing and equality: MP4, Python vs Go, three runs each, alternating, cold cache every run
+pt=(); gt=()
+for i in 1 2 3; do
+  rm -f $T/pyroot/proxy/*.mp4 $T/xroot/proxy/*.mp4
+  r=$(python3 $T/exp.py run $P mp4 $vid $T/py$i.mp4); pt+=("${r% *}"); [ "${r#* }" = done ] || echo "INFO  python run $i: $r"
+  r=$(python3 $T/exp.py run $X mp4 $vid $T/go$i.mp4); gt+=("${r% *}"); [ "${r#* }" = done ] || echo "INFO  go run $i: $r"
+done
+echo "INFO  mp4 export seconds, python: ${pt[*]}; go: ${gt[*]}"
+pm=$(printf '%s\n' "${pt[@]}" | median); gm=$(printf '%s\n' "${gt[@]}" | median)
+awk "BEGIN{exit !($gm <= 1.05 * $pm)}" && report "export: MP4 of a $vd s recording no slower than 105% of Python (median of 3)" 0 "go ${gm}s vs python ${pm}s" ||
+  report "export: MP4 of a $vd s recording no slower than 105% of Python (median of 3)" 1 "go ${gm}s vs python ${pm}s"
+[ -s $T/go1.mp4 ] && [ -s $T/py1.mp4 ] && [ "$(streams $T/go1.mp4)" = "$(streams $T/py1.mp4)" ] && report "export: MP4 from Go and Python have the same codecs and resolution" 0 "$(streams $T/go1.mp4)" ||
+  report "export: MP4 from Go and Python have the same codecs and resolution" 1 "go: $(streams $T/go1.mp4) python: $(streams $T/py1.mp4)"
+gd=$(dur $T/go1.mp4); pd=$(dur $T/py1.mp4)
+awk "BEGIN{d=$gd-$pd; if(d<0)d=-d; exit !(d <= 1)}" && report "export: MP4 durations within 1 s (source $vd)" 0 "go $gd, python $pd" || report "export: MP4 durations within 1 s (source $vd)" 1 "go $gd, python $pd"
+
+# -- the other formats from Go, each ffprobe-valid with the expected streams
+for spec in "mov:aac h264" "webm:opus vp9" "mp3:mp3"; do
+  f=${spec%%:*}; want=${spec#*:}
+  r=$(python3 $T/exp.py run $X $f $vid $T/out.$f)
+  got=$(ffprobe -v error -show_entries stream=codec_name -of csv=p=0 $T/out.$f 2>/dev/null | sort | tr '\n' ' ')
+  [ "${r#* }" = done ] && [ -n "$(dur $T/out.$f 2>/dev/null)" ] && [ "$got" = "$want " ] && report "export: $f ffprobe valid, streams ${want}" 0 "${r% *} s, duration $(dur $T/out.$f)" ||
+    report "export: $f ffprobe valid, streams ${want}" 1 "$r streams '$got'"
+done
+
+# -- two simultaneous exports: never more than one ffmpeg
+a=$(python3 $T/exp.py start $X webm $vid); b=$(python3 $T/exp.py start $X webm $vid)
+max=0; n=0
+while [ "$(python3 $T/exp.py state $X $a)" = running ] || [ "$(python3 $T/exp.py state $X $b)" = running ]; do
+  c=$(ffn); [ "$c" -gt "$max" ] && max=$c; n=$((n + 1)); [ $n -gt 2400 ] && break; sleep 0.05
+done
+sa=$(python3 $T/exp.py state $X $a); sb=$(python3 $T/exp.py state $X $b)
+[ "$max" = 1 ] && [ "$sa $sb" = "done done" ] && report "export: two simultaneous exports run one ffmpeg at a time, both finish" 0 "max concurrent ffmpeg $max, $n samples" ||
+  report "export: two simultaneous exports run one ffmpeg at a time, both finish" 1 "max $max, states $sa $sb"
+python3 $T/exp.py cancel $X $a >/dev/null; python3 $T/exp.py cancel $X $b >/dev/null
+
+# -- cancel a running export
+rm -f $T/xroot/proxy/*
+a=$(python3 $T/exp.py start $X mp4 $vid)
+for _ in $(seq 100); do [ "$(ffn)" -ge 1 ] && break; sleep 0.1; done
+t0=$(date +%s.%N); had=$(ffn); python3 $T/exp.py cancel $X $a >/dev/null; gone=1
+for _ in $(seq 60); do
+  [ "$(ffn)" = 0 ] && [ ! -e $T/xroot/tmp/export-$a ] && ! ls $T/xroot/proxy/*.part >/dev/null 2>&1 && { gone=0; break; }; sleep 0.05
+done
+el=$(awk "BEGIN{printf \"%.2f\", $(date +%s.%N) - $t0}")
+[ "$had" -ge 1 ] && [ $gone = 0 ] && awk "BEGIN{exit !($el <= 3)}" && report "export: cancelling a running export leaves no ffmpeg and no partial file within 3 s" 0 "${el}s" ||
+  report "export: cancelling a running export leaves no ffmpeg and no partial file within 3 s" 1 "ffmpeg before=$had gone=$gone after ${el}s"
+
+# -- kill the instance mid-export (and its ffmpeg, as the unit's cgroup kill does), start again
+rm -f $T/xroot/proxy/*
+a=$(python3 $T/exp.py start $X mp4 $vid)
+for _ in $(seq 100); do ls $T/xroot/proxy/*.part >/dev/null 2>&1 && break; sleep 0.1; done
+pre="$(ls -d $T/xroot/tmp/export-* 2>/dev/null | wc -l) export dir(s), $(ls $T/xroot/proxy/*.part 2>/dev/null | wc -l) .part"
+kill -9 $XPID; wait $XPID 2>/dev/null; pkill -9 -x ffmpeg-x; sleep 0.3
+xstart
+post="$(ls -d $T/xroot/tmp/export-* 2>/dev/null | wc -l) export dir(s), $(ls $T/xroot/proxy/*.part 2>/dev/null | wc -l) .part"
+[ "${pre%% *}" -ge 1 ] && [ "$post" = "0 export dir(s), 0 .part" ] && report "export: restarting mid-export cleans export-* and the .part at startup" 0 "before: $pre; after: $post" ||
+  report "export: restarting mid-export cleans export-* and the .part at startup" 1 "before: $pre; after: $post"
+REMOTE
+fails=$((fails + $(grep -c '^FAIL' "$out4")))
+rm -f "$out4"
+
+# retire-python.sh --check, on the Pi, changes nothing
+echo "== retire-python.sh --check"
+rp="$(ssh "${SSH_OPTS[@]}" "$PI" 'bash -s -- --check' < "$REPO/platform/provision/retire-python.sh" 2>&1)"; rprc=$?
+echo "$rp"
+[ $rprc = 0 ] && ! grep -q '^REFUSE' <<<"$rp" && grep -q 'would remove' <<<"$rp" && report "retire-python.sh --check lists the plan and the dependency analysis" 0 ||
+  report "retire-python.sh --check lists the plan and the dependency analysis" 1 "rc=$rprc"
+pi "rm -rf $W3"
+# from outside the Pi, as a phone would
+[ "$(curl -s -o /dev/null -m 10 -w '%{http_code}' "http://${PI#*@}:8081/api/state")" = 200 ] && report "camera app answers from the laptop at ${PI#*@}:8081" 0 || report "camera app answers from the laptop at ${PI#*@}:8081" 1
 
 # ---- loop-image tests, run as root on the Pi ----------------------------------
 W="$(pi mktemp -d /var/tmp/c1-ref.XXXXXX)" || { echo "FAIL  cannot reach Pi"; exit 1; }
