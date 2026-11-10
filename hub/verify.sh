@@ -152,7 +152,7 @@ cam_before="$(pi 'systemctl is-active camera-drive-web')"
 echo "INFO  before: camera-drive-web=$cam_before camera-live=$live_before"
 api() { pi "curl -s -m 60 -b $T/jar -c $T/jar $1"; }
 start_inst() {
-  pi "cd $T && setsid nohup /usr/local/bin/pihub --listen 127.0.0.1:18081 --hash-file $T/admin.hash --state-dir $T --services-dir $T/svc >$T/log 2>&1 & echo \$! >$T/pid"
+  pi "setsid nohup /usr/local/bin/pihub --listen 127.0.0.1:18081 --hash-file $T/admin.hash --state-dir $T --services-dir $T/svc >$T/log 2>&1 </dev/null & echo \$! >$T/pid"
   wait_for 10 pi "curl -s -o /dev/null -m 2 $H3/"
   [ "$(pi "curl -s -o /dev/null -m 5 -c $T/jar --data-urlencode password=$PW3 -w '%{http_code}' $H3/admin/api/login")" = 204 ]
 }
