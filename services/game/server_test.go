@@ -185,7 +185,7 @@ func TestTwoClientGame(t *testing.T) {
 		t.Fatalf("rejoin: %d %s", code, body)
 	}
 	b2.connect()
-	b2.await(func(v View) bool { return v.Phase == RoundEnd && v.Round == 1 && v.Other.Score == 2 })
+	b2.await(func(v View) bool { return v.Phase == RoundEnd && v.Round == 1 && v.Other.Score == 3 })
 
 	b2.must("next")
 	b2.must("next")
