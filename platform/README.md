@@ -6,7 +6,7 @@ this folder.
 
 - `rootfs/` — files mirrored onto the Pi's `/`: the network fallback, cloud-init off
 - `provision/` — getting a fresh SD card to a reachable Pi, then `base.sh`
-- `deploy.sh` — pushes `platform/rootfs/` and `app/rootfs/`
+- `deploy.sh` — pushes `platform/rootfs/`, `app/rootfs/` and `hub/rootfs/` (run `make -C hub build` first)
 
 ## Deploying
 

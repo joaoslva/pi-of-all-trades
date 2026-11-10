@@ -9,7 +9,7 @@
 # Usage:
 #   platform/deploy.sh [--list|--check] [--no-reload] [component ...]
 #
-#   component    "platform" or "app"; default: both
+#   component    "platform", "app" or "hub"; default: all three
 #   --list       print what each component ships, touch nothing
 #   --check      show what differs on the Pi, change nothing
 #   --no-reload  install without reloading systemd or udev, or restarting
@@ -52,7 +52,7 @@ files_in() {
 }
 
 if [ ${#components[@]} -eq 0 ]; then
-  components=(platform app)
+  components=(platform app hub)
 fi
 
 roots=()
@@ -60,6 +60,12 @@ for c in "${components[@]}"; do
   r="$(rootfs_of "$c")"
   [ -d "$r" ] || die "component '$c' has no rootfs ($r)"
   roots+=("$r")
+done
+
+# The hub binary is built, not committed.
+for c in "${components[@]}"; do
+  [ "$c" != hub ] || [ -f "$REPO/hub/rootfs/usr/local/bin/pihub" ] ||
+    die "hub binary missing: run 'make -C hub build' first"
 done
 
 # Only regular files: the install step below does not handle symlinks,
