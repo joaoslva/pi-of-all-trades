@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi admin</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 0 auto; padding: 16px; }
+  input, button { font: inherit; padding: 12px; margin: 6px 0; border-radius: 8px; border: 1px solid; width: 100%; box-sizing: border-box; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+  dt { opacity: .7; } dd { margin: 0; text-align: right; }
+  .err { color: #c00; }
+</style>
+</head>
+<body>
+<h1>Pi admin</h1>
+<form id="login" hidden>
+  <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+  <button>Log in</button>
+  <p class="err" id="err"></p>
+</form>
+<div id="main" hidden>
+  <dl id="stats"></dl>
+  <button data-power="reboot">Reboot</button>
+  <button data-power="poweroff">Power off</button>
+  <p id="msg"></p>
+</div>
+<p><a href="/">Services</a></p>
+<script>
+const $ = id => document.getElementById(id);
+const post = (url, body) => fetch(url, {method: 'POST', body});
+async function refresh() {
+  const r = await fetch('/admin/api/stats');
+  $('login').hidden = r.ok; $('main').hidden = !r.ok;
+  if (!r.ok) return;
+  const s = await r.json();
+  const gb = b => (b / 1e9).toFixed(1) + ' GB', mb = k => Math.round(k / 1024) + ' MB';
+  const up = Math.floor(s.uptime_s / 60);
+  const rows = {Load: s.load1.toFixed(2), Temperature: s.temp_c.toFixed(1) + ' °C',
+    Memory: mb(s.mem_available_kb) + ' free of ' + mb(s.mem_total_kb),
+    Disk: gb(s.disk_free) + ' free of ' + gb(s.disk_total),
+    Uptime: Math.floor(up / 1440) + ' d ' + Math.floor(up % 1440 / 60) + ' h ' + up % 60 + ' min'};
+  $('stats').replaceChildren(...Object.entries(rows).flatMap(([k, v]) => {
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = k; dd.textContent = v; return [dt, dd];
+  }));
+}
+$('login').onsubmit = async e => {
+  e.preventDefault();
+  const r = await post('/admin/api/login', new URLSearchParams(new FormData(e.target)));
+  $('err').textContent = r.ok ? '' : (r.status == 429 ? 'Too many attempts, wait a minute.' : 'Wrong password.');
+  e.target.reset(); refresh();
+};
+document.querySelectorAll('[data-power]').forEach(b => b.onclick = async () => {
+  const action = b.dataset.power;
+  if (!confirm(action === 'reboot' ? 'Reboot the Pi?' : 'Power off the Pi? It will need to be unplugged to start again.')) return;
+  const {nonce} = await (await post('/admin/api/power', JSON.stringify({action}))).json();
+  const r = await post('/admin/api/power', JSON.stringify({action, nonce}));
+  $('msg').textContent = r.ok ? 'Done. The Pi is going down.' : 'Failed: ' + await r.text();
+});
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>
