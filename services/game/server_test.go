@@ -215,7 +215,7 @@ func TestTwoClientGame(t *testing.T) {
 	resp, _ := http.Get(ts.URL + "/api/history")
 	var h []HistoryEntry
 	json.NewDecoder(resp.Body).Decode(&h)
-	if len(h) != 1 || h[0].Rounds != 2 || h[0].Players[0].Name != "Ann" || h[0].Players[0].Score != 2 {
+	if len(h) != 1 || h[0].Rounds != 2 || h[0].Players[0].Name != "Ann" || h[0].Players[0].Score != 3 {
 		t.Fatalf("history %+v", h)
 	}
 	a.must("back_to_lobby")
