@@ -216,26 +216,44 @@ var (
 	jpegEOI = []byte{0xff, 0xd9}
 )
 
-// readLiveFrame drops frames that do not end in EOI: ffmpeg rewrites live.jpg in
-// place, so a reader can catch it half written.
-func (c webCfg) readLiveFrame() []byte {
-	b, err := os.ReadFile(c.liveJPG())
-	if err != nil || len(b) < 1024 || !bytes.HasSuffix(b, jpegEOI) {
+// readLiveFrame reads live.jpg into buf (reused between polls: 12 frames a second
+// of fresh allocations is most of this process's CPU). It returns nil for
+// frames that do not end in EOI, because ffmpeg rewrites the file in place and
+// a reader can catch it half written.
+func (c webCfg) readLiveFrame(buf []byte) []byte {
+	f, err := os.Open(c.liveJPG())
+	if err != nil {
 		return nil
 	}
-	return b
+	defer f.Close()
+	buf = buf[:0]
+	for {
+		if len(buf) == cap(buf) {
+			grown := make([]byte, len(buf), 2*cap(buf)+(64<<10))
+			copy(grown, buf)
+			buf = grown
+		}
+		n, err := f.Read(buf[len(buf):cap(buf)])
+		buf = buf[:len(buf)+n]
+		if err != nil {
+			break
+		}
+	}
+	if len(buf) < 1024 || !bytes.HasSuffix(buf, jpegEOI) {
+		return nil
+	}
+	return buf
 }
 
-func writeFrame(w http.ResponseWriter, frame []byte) error {
-	if _, err := fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", len(frame)); err != nil {
+// writeFrame sends one multipart part in a single write and flushes it; out is scratch space.
+func writeFrame(w http.ResponseWriter, out *[]byte, frame []byte) error {
+	b := fmt.Appendf((*out)[:0], "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", len(frame))
+	b = append(append(b, frame...), '\r', '\n')
+	*out = b
+	if _, err := w.Write(b); err != nil {
 		return err
 	}
-	if _, err := w.Write(frame); err != nil {
-		return err
-	}
-	_, err := io.WriteString(w, "\r\n")
-	http.NewResponseController(w).Flush()
-	return err
+	return http.NewResponseController(w).Flush()
 }
 
 const multipartType = "multipart/x-mixed-replace; boundary=frame"
@@ -246,12 +264,12 @@ func (c webCfg) apiStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", multipartType)
-	var last []byte
+	var cur, last, out []byte
 	idle := 0
 	for {
-		if frame := c.readLiveFrame(); frame != nil && !bytes.Equal(frame, last) {
-			last, idle = frame, 0
-			if writeFrame(w, frame) != nil {
+		if frame := c.readLiveFrame(cur); frame != nil && !bytes.Equal(frame, last) {
+			cur, last, idle = last, frame, 0
+			if writeFrame(w, &out, frame) != nil {
 				return
 			}
 		} else if idle++; idle > c.IdleLimit {
@@ -267,7 +285,7 @@ func (c webCfg) apiStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c webCfg) apiLiveJPG(w http.ResponseWriter, r *http.Request) {
-	frame := c.readLiveFrame()
+	frame := c.readLiveFrame(nil)
 	if frame == nil {
 		http.Error(w, "no frame", http.StatusServiceUnavailable)
 		return
@@ -299,7 +317,7 @@ func (c webCfg) apiPlay(w http.ResponseWriter, r *http.Request) {
 	// Reached on a write error too: the context only ends when the client is gone.
 	defer func() { cmd.Process.Kill(); cmd.Wait() }()
 	w.Header().Set("Content-Type", multipartType)
-	var buf []byte
+	var buf, scratch []byte
 	chunk := make([]byte, 65536)
 	for {
 		n, err := out.Read(chunk)
@@ -311,7 +329,7 @@ func (c webCfg) apiPlay(w http.ResponseWriter, r *http.Request) {
 			}
 			frame := buf[:end+2]
 			buf = append([]byte(nil), buf[end+2:]...)
-			if start := bytes.Index(frame, jpegSOI); start != -1 && writeFrame(w, frame[start:]) != nil {
+			if start := bytes.Index(frame, jpegSOI); start != -1 && writeFrame(w, &scratch, frame[start:]) != nil {
 				return
 			}
 		}
@@ -439,7 +457,7 @@ func attachment(name string) string {
 	return mime.FormatMediaType("attachment", map[string]string{"filename": name})
 }
 
-func serveFile(w http.ResponseWriter, r *http.Request, p, contentType, downloadName string) {
+func serveFile(w http.ResponseWriter, r *http.Request, p, contentType, disposition string) {
 	f, err := os.Open(p)
 	if err != nil {
 		http.NotFound(w, r)
@@ -452,8 +470,11 @@ func serveFile(w http.ResponseWriter, r *http.Request, p, contentType, downloadN
 		return
 	}
 	w.Header().Set("Content-Type", contentType)
-	if downloadName != "" {
-		w.Header().Set("Content-Disposition", attachment(downloadName))
+	if disposition != "" {
+		w.Header().Set("Content-Disposition", disposition)
+	}
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-cache")
 	}
 	http.ServeContent(w, r, "", st.ModTime(), f)
 }
@@ -470,11 +491,11 @@ func (c webCfg) apiMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	// Browsers cannot decode MJPEG/Matroska and show a bare "no supported
 	// source"; send video as a download. In-app playback goes through /api/play.
-	name := ""
+	disp := mime.FormatMediaType("inline", map[string]string{"filename": filepath.Base(p)})
 	if _, dl := r.URL.Query()["dl"]; dl || videoSuffixes[strings.ToLower(pySuffix(p))] {
-		name = filepath.Base(p)
+		disp = attachment(filepath.Base(p))
 	}
-	serveFile(w, r, p, typ, name)
+	serveFile(w, r, p, typ, disp)
 }
 
 func (c webCfg) apiThumb(w http.ResponseWriter, r *http.Request) {

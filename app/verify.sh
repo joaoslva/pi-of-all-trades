@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build and deploy the app component, then check offload, wipe and live on the real Pi.
+# Build and deploy the app component, then check offload, wipe, live and the web read side on the real Pi.
 # One PASS/FAIL/SKIP line per check; exits non-zero on any FAIL. Never reboots.
 #
 # Offload and wipe are exercised on a loop-mounted FAT test image under a temp
@@ -129,6 +129,211 @@ REMOTE
   fails=$((fails + $(grep -c '^FAIL' "$out2")))
   rm -f "$out2"
 fi
+
+# ---- web read side (C3): Go on :8082 beside the production Python on :8081 -----------
+# Read-only against /srv/camera-drive (thumbs are made in a scratch root). Never calls /api/wipe,
+# /api/power or an export route except to see the 501 stub. The only state touched is
+# control.json (preview on, then back to all-false) and only when the camera is in live mode.
+out3="$(mktemp)"
+ssh "${SSH_OPTS[@]}" "$PI" bash -s <<'REMOTE' | tee "$out3"
+set -u
+GO=/usr/local/bin/camera-drive
+T=$(mktemp -d /var/tmp/c3-verify.XXXXXX)
+G=http://127.0.0.1:8082; P=http://127.0.0.1:8081
+GOPID=""
+report() { case "$2" in 0) echo "PASS  $1${3:+ ($3)}";; skip) echo "SKIP  $1${3:+ ($3)}";; *) echo "FAIL  $1${3:+ ($3)}";; esac; }
+check() { local n=$1; shift; if "$@"; then report "$n" 0; else report "$n" 1; fi; }
+startgo() { # startgo [extra flags]: Go web on :8082 as joao, pid recorded
+  nohup $GO web --listen 127.0.0.1:8082 "$@" >$T/go.log 2>&1 & GOPID=$!
+  for _ in $(seq 50); do curl -s -o /dev/null $G/api/live.jpg && return 0; sleep 0.1; done; return 1
+}
+stopgo() { [ -n "$GOPID" ] && kill $GOPID 2>/dev/null; wait $GOPID 2>/dev/null; GOPID=""; }
+ctl() { curl -s -X POST -H 'Content-Type: application/json' -d "$1" $G/api/control >/dev/null; }
+cleanup() { [ -n "$GOPID" ] && { ctl '{"preview":false,"recording":false}'; kill $GOPID 2>/dev/null; }; rm -rf $T; }
+trap cleanup EXIT
+rss() { awk '/^VmRSS/{print $2}' /proc/$1/status; }
+hwm() { awk '/^VmHWM/{print $2}' /proc/$1/status; }
+ticks() { awk '{print $14+$15}' /proc/$1/stat; }
+PYPID=$(systemctl show -p MainPID --value camera-drive-web)
+frames() { grep -ac '^--frame' "$1"; }
+
+cat > $T/a.py <<'PY'
+import hashlib, http.client, io, json, struct, sys, zipfile, urllib.parse
+G, P, TH = sys.argv[1:4]
+def hp(base):
+    u = urllib.parse.urlparse(base); return u.hostname, u.port
+def req(base, method, path, body=None, headers=None):
+    c = http.client.HTTPConnection(*hp(base), timeout=60)
+    c.putrequest(method, path, skip_accept_encoding=True)  # path sent as-is, no client-side cleaning
+    for k, v in (headers or {}).items(): c.putheader(k, v)
+    if body is not None: c.putheader("Content-Length", str(len(body)))
+    c.endheaders(body)
+    r = c.getresponse(); data = r.read(); h = {k.lower(): v for k, v in r.getheaders()}
+    c.close(); return r.status, h, data
+def rep(name, ok, detail=""): print(("PASS  " if ok else "FAIL  ") + name + (f" ({detail})" if detail else ""), flush=True)
+
+# state
+VARY = {"disk"}   # used/free/pct move with every write; nothing else is allowed to differ
+def state(b): return json.loads(req(b, "GET", "/api/state")[2])
+a, b = state(G), state(P)
+for _ in range(2):
+    if {k: v for k, v in a.items() if k not in VARY} == {k: v for k, v in b.items() if k not in VARY}: break
+    a, b = state(G), state(P)
+same = json.dumps({k: v for k, v in a.items() if k not in VARY}, sort_keys=True) == json.dumps({k: v for k, v in b.items() if k not in VARY}, sort_keys=True)
+rep("web: /api/state equal to Python (sorted keys, bar disk)", same,
+    f"{len(a['dumps'])} dumps, {len(a['captures'])} days, held={a['held']}, camera={a['camera']}")
+rep("web: disk keys and total agree", set(a["disk"]) == set(b["disk"]) and a["disk"]["total"] == b["disk"]["total"])
+if not same:
+    for k in a:
+        if k not in VARY and a[k] != b[k]: print("INFO  differs:", k, str(a[k])[:300], "|", str(b[k])[:300])
+
+imgs = [i["path"] for d in a["dumps"] for i in d["items"] if i["kind"] == "image"]
+vids = [i["path"] for d in a["dumps"] for i in d["items"] if i["kind"] == "video"] + [i["path"] for g in a["captures"] for i in g["items"] if i["kind"] == "video"]
+q = lambda p: "/media/" + urllib.parse.quote(p)
+
+# media ranges, image and video
+for label, rel in (("image", imgs[0]), ("video", vids[-1])):
+    ra, rb = (req(x, "GET", q(rel), headers={"Range": "bytes=100-4195"}) for x in (G, P))
+    keys = ["content-range", "content-length", "content-type", "accept-ranges", "content-disposition"]
+    ha, hb = ({k: h.get(k) for k in keys} for h in (ra[1], rb[1]))
+    rep(f"web: /media {label} Range: identical 206 status, headers and body", ra[0] == rb[0] == 206 and ha == hb and ra[2] == rb[2],
+        f"{rel} {ha}" if ha != hb or ra[0] != 206 else f"{ra[0]} {ha['content-range']} sha {hashlib.sha256(ra[2]).hexdigest()[:12]}")
+ra, rb = (req(x, "GET", q(vids[-1]) + "?dl") for x in (G, P))
+rep("web: /media ?dl full body identical", ra[0] == rb[0] == 200 and ra[2] == rb[2] and ra[1].get("content-disposition") == rb[1].get("content-disposition"))
+
+# zip of 10 files
+form = "&".join("path=" + urllib.parse.quote(p) for p in imgs[:10]).encode()
+zs = []
+for x in (G, P):
+    st, h, data = req(x, "POST", "/api/zip", form, {"Content-Type": "application/x-www-form-urlencoded"})
+    zf = zipfile.ZipFile(io.BytesIO(data)); zs.append((st, h.get("content-disposition", "")[:34], sorted((i.filename, i.file_size, i.compress_type) for i in zf.infolist()), zf.testzip()))
+rep("web: zip of 10 files lists identical names and sizes (stored, testzip ok)", len(zs[0][2]) == 10 and zs[0][2] == zs[1][2] and zs[0][0] == zs[1][0] == 200 and zs[0][3] is None and zs[0][1].startswith("attachment; filename=camera-drive_"),
+    f"{len(zs[0][2])} entries")
+
+# thumbnails (scratch root, so nothing is written under /srv/camera-drive)
+def jpeg_width(d):
+    if d[:2] != b"\xff\xd8": return None
+    i = 2
+    while i + 4 <= len(d):
+        if d[i] != 0xff: return None
+        m, ln = d[i+1], struct.unpack(">H", d[i+2:i+4])[0]
+        if m in (0xc0, 0xc1, 0xc2): return struct.unpack(">H", d[i+7:i+9])[0]
+        i += 2 + ln
+for label, rel in (("image", imgs[0]), ("video", vids[-1])):
+    st, h, data = req(TH, "GET", "/thumb/" + urllib.parse.quote(rel))
+    w = jpeg_width(data)
+    rep(f"web: thumbnail of one {label} is a JPEG of width 320", st == 200 and w == 320 and h.get("cache-control") == "max-age=86400", f"{rel} status={st} width={w}")
+
+# 501 stubs, absent power route, page
+for m, p in (("POST", "/api/export"), ("GET", "/api/mp4/" + vids[-1]), ("GET", "/api/export/x/file")):
+    st, h, data = req(G, m, p, b"{}" if m == "POST" else None, {"Content-Type": "application/json"})
+    rep(f"web: {m} {p.split('/')[1]}/{p.split('/')[2]} is the 501 stub", st == 501 and json.loads(data) == {"ok": False, "error": "export lands in C4"})
+rep("web: no /api/power route (POST and GET 404)", req(G, "POST", "/api/power", b"")[0] == 404 and req(G, "GET", "/api/power")[0] == 404)
+st, h, page = req(G, "GET", "/")
+rep("web: / serves the page without a power button or __ICON__ placeholder", st == 200 and b'id="power"' not in page and b"/api/power" not in page and b"__ICON" not in page and h["content-type"].startswith("text/html"))
+
+# traversal over HTTP
+bad = ["/media/../../etc/passwd", "/media/%2e%2e/%2e%2e/etc/passwd", "/media/%2e%2e%2f%2e%2e%2fetc/passwd", "/media/%252e%252e/etc/passwd",
+       "/media//etc/passwd", "/media/%2fetc/passwd", "/media/media/%00/x", "/media/media/..%00/x", "/thumb/../../etc/passwd", "/thumb/%2e%2e/etc/passwd",
+       "/api/play/../../etc/passwd", "/api/play/%2e%2e/%2e%2e/etc/passwd", "/media/etc/passwd", "/media/media", "/media/media/", "/media/video/",
+       "/media/media/..", "/media/media/snapshots/../../index.json", "/thumb/index.json", "/media/index.json", "/media/proxy/x.mp4", "/media/thumbs/x.jpg"]
+codes = {p: req(G, "GET", p)[0] for p in bad}
+codes["POST /api/zip ../index.json"] = req(G, "POST", "/api/zip", b"path=../index.json", {"Content-Type": "application/x-www-form-urlencoded"})[0]
+codes["POST /api/zip media/../index.json"] = req(G, "POST", "/api/zip", b"path=media/../index.json", {"Content-Type": "application/x-www-form-urlencoded"})[0]
+rep("web: all traversal attempts over HTTP are 404", all(c == 404 for c in codes.values()), f"{len(codes)} attempts" if all(c == 404 for c in codes.values()) else str({k: v for k, v in codes.items() if v != 404}))
+PY
+
+cat > $T/loop.py <<'PY'
+# The same request mix against one server: state, ranges, zips, cached thumbnails.
+import http.client, json, sys, urllib.parse
+base = urllib.parse.urlparse(sys.argv[1]); n = int(sys.argv[2])
+def req(m, p, body=None, h=None):
+    c = http.client.HTTPConnection(base.hostname, base.port, timeout=120)
+    c.request(m, p, body, h or {}); r = c.getresponse(); d = r.read(); c.close(); return r.status, d
+st = json.loads(req("GET", "/api/state")[1])
+imgs = [i["path"] for d in st["dumps"] for i in d["items"] if i["kind"] == "image"]
+for i in range(n):
+    req("GET", "/api/state")
+    p = imgs[i % len(imgs)]
+    req("GET", "/media/" + urllib.parse.quote(p), h={"Range": "bytes=0-65535"})
+    req("GET", "/thumb/" + urllib.parse.quote(p))
+    if i % 10 == 0:
+        req("POST", "/api/zip", "&".join("path=" + urllib.parse.quote(x) for x in imgs[i % 20:i % 20 + 10]).encode(), {"Content-Type": "application/x-www-form-urlencoded"})
+PY
+
+# ---- group A: HTTP behaviour, no camera needed ----
+mkdir -p $T/root; ln -s /srv/camera-drive/media $T/root/media; ln -s /srv/camera-drive/video $T/root/video
+nohup $GO web --listen 127.0.0.1:8083 --root $T/root >$T/go3.log 2>&1 & TPID=$!
+if startgo; then
+  sleep 0.5
+  python3 $T/a.py $G $P http://127.0.0.1:8083
+else report "web: Go app starts on :8082" 1 "$(cat $T/go.log)"; fi
+kill $TPID 2>/dev/null; wait $TPID 2>/dev/null
+check "web: unit file untouched, Python still serves :8081" bash -c "curl -s -o /dev/null -w '%{http_code}' $P/api/state | grep -q 200 && systemctl cat camera-drive-web | grep -q camera-drive-web"
+
+# /api/play: multipart frames, ffmpeg gone after the client leaves
+vid=video/2026-08-17_175004.mkv
+curl -s --max-time 3 -o $T/play.out $G/api/play/$vid; n=$(frames $T/play.out)
+[ "$n" -ge 5 ] && report "web: /api/play streams multipart frames" 0 "$n frames in 3 s of $vid" || report "web: /api/play streams multipart frames" 1 "$n frames"
+curl -s -o /dev/null $G/api/play/$vid & CP=$!; sleep 2
+pgrep -f 'image2pipe' >/dev/null && had=1 || had=0
+kill $CP; wait $CP 2>/dev/null; gone=0
+for _ in $(seq 30); do pgrep -f 'image2pipe' >/dev/null || { gone=1; break; }; sleep 0.1; done
+[ $had = 1 ] && [ $gone = 1 ] && report "web: ffmpeg for /api/play is gone within 3 s of the client leaving" 0 || report "web: ffmpeg for /api/play is gone within 3 s of the client leaving" 1 "was running=$had gone=$gone"
+[ "$(curl -s -o /dev/null -w '%{http_code}' $G/api/play/media/snapshots/SNAP_2026-08-17_183539.jpg)" = 400 ] && report "web: /api/play of a photo is 400" 0 || report "web: /api/play of a photo is 400" 1
+stopgo
+
+# ---- group B: live preview. Needs the camera in live mode with camera-live running ----
+if lsusb | grep -q '08ca:2022' && systemctl is-active --quiet camera-live; then
+  startgo || report "web: Go app starts on :8082" 1
+  ctl '{"preview":true}'
+  for _ in $(seq 60); do [ "$(stat -c %s /run/camera-drive/live.jpg 2>/dev/null || echo 0)" -ge 1024 ] && break; sleep 0.5; done
+  if [ "$(stat -c %s /run/camera-drive/live.jpg 2>/dev/null || echo 0)" -lt 1024 ]; then
+    report "web: live stream checks" 1 "preview never produced live.jpg"
+  else
+    [ "$(curl -s -o $T/one.jpg -w '%{http_code} %{content_type}' $G/api/live.jpg)" = "200 image/jpeg" ] && report "web: /api/live.jpg serves a frame" 0 || report "web: /api/live.jpg serves a frame" 1
+    curl -sN --max-time 10 -o $T/s1 $G/api/stream; n=$(frames $T/s1)
+    [ "$n" -ge 30 ] && report "web: /api/stream delivers frames for 10 s" 0 "$n frames" || report "web: /api/stream delivers frames for 10 s" 1 "$n frames"
+    curl -sN -o /dev/null $G/api/stream & CP=$!; sleep 2
+    est=$(ss -Htn state established '( sport = :8082 )' | wc -l)
+    kill $CP; wait $CP 2>/dev/null; t0=$SECONDS; left=1
+    for _ in $(seq 50); do [ "$(ss -Htn state established '( sport = :8082 )' | wc -l)" = 0 ] && { left=0; break; }; sleep 0.1; done
+    [ "$est" -ge 1 ] && [ $left = 0 ] && report "web: stream connection closes within 5 s of the client leaving" 0 "$((SECONDS - t0)) s" || report "web: stream connection closes within 5 s of the client leaving" 1 "established=$est still_open=$left"
+
+    cps=(); for i in $(seq 10); do curl -sN --max-time 10 -o $T/m$i $G/api/stream & cps+=($!); done; wait "${cps[@]}" 2>/dev/null
+    counts=$(for i in $(seq 10); do frames $T/m$i; done | sort -n | tr '\n' ' ')
+    min=$(echo $counts | awk '{print $1}'); max=$(echo $counts | awk '{print $NF}'); h=$(hwm $GOPID)
+    echo "INFO  10 streams, frames each: $counts; Go peak RSS ${h} kB"
+    [ "$h" -lt 61440 ] && report "web: 10 simultaneous streams keep the Go process under 60 MB" 0 "${h} kB" || report "web: 10 simultaneous streams keep the Go process under 60 MB" 1 "${h} kB"
+    awk "BEGIN{exit !($min >= 20 && $min >= 0.7 * $max)}" && report "web: no one of 10 streams stalled" 0 "min $min max $max" || report "web: no one of 10 streams stalled" 1 "min $min max $max"
+
+    # CPU of one 10 s stream, Go then Python (utime+stime ticks of the server process, 100 per second)
+    g0=$(ticks $GOPID); curl -sN --max-time 10 -o /dev/null $G/api/stream; g1=$(ticks $GOPID)
+    p0=$(ticks $PYPID); curl -sN --max-time 10 -o /dev/null $P/api/stream; p1=$(ticks $PYPID)
+    gt=$((g1 - g0)); pt=$((p1 - p0))
+    echo "INFO  one 10 s stream: Go $gt ticks, Python $pt ticks"
+    [ $gt -le $pt ] && report "web: CPU during one stream no higher than Python's" 0 "go $gt vs python $pt ticks" || report "web: CPU during one stream no higher than Python's" 1 "go $gt vs python $pt ticks"
+  fi
+  ctl '{"preview":false,"recording":false}'
+  sleep 1
+  ctl_state=$(python3 -c 'import json;d=json.load(open("/run/camera-drive/control.json"));print(d["preview"],d["recording"])')
+  [ "$ctl_state" = "False False" ] && report "web: control.json restored to preview=false recording=false" 0 || report "web: control.json restored to preview=false recording=false" 1 "$ctl_state"
+  stopgo
+else
+  for n in "/api/live.jpg, /api/stream frames, close after leave, 10 streams, CPU"; do report "web: $n" skip "camera not in live mode or camera-live not running"; done
+fi
+
+# ---- group C: memory after the same request loop, Go then Python ----
+startgo && {
+  python3 $T/loop.py $G 150; gr=$(rss $GOPID)
+  python3 $T/loop.py $P 150; pr=$(rss $PYPID)
+  echo "INFO  after 150 rounds: Go RSS ${gr} kB, Python RSS ${pr} kB"
+  [ $((gr * 2)) -le "$pr" ] && report "web: Go RSS at most half of Python's after the same request loop" 0 "go ${gr} kB, python ${pr} kB" || report "web: Go RSS at most half of Python's after the same request loop" 1 "go ${gr} kB, python ${pr} kB"
+}
+stopgo
+REMOTE
+fails=$((fails + $(grep -c '^FAIL' "$out3")))
+rm -f "$out3"
 
 # ---- loop-image tests, run as root on the Pi ----------------------------------
 W="$(pi mktemp -d /var/tmp/c1-ref.XXXXXX)" || { echo "FAIL  cannot reach Pi"; exit 1; }

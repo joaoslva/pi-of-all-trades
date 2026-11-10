@@ -317,7 +317,7 @@ func TestMediaRangeAndDisposition(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != 206 || rec.Body.String() != "234" || rec.Header().Get("Content-Range") != "bytes 1-3/5" ||
-		rec.Header().Get("Content-Type") != "image/jpeg" || rec.Header().Get("Content-Disposition") != "" {
+		rec.Header().Get("Content-Type") != "image/jpeg" || rec.Header().Get("Content-Disposition") != "inline; filename=IMG_0001.JPG" {
 		t.Errorf("range: %d %q %v", rec.Code, rec.Body, rec.Header())
 	}
 	rec = doReq(h, "GET", "/media/media/2026-01-02_030405/CLIP.AVI", nil)
