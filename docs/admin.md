@@ -1,6 +1,26 @@
 # Admin page
 
-`http://<pi>/admin` shows Pi stats and reboot / power-off buttons behind one password.
+`http://<pi>/admin` is the Pi's control panel behind one password. The landing page `http://<pi>/` has one button per service and a lock icon (top right) that leads here.
+
+## The pages
+
+Both pages share `hub/web/theme.css`, served at `/theme.css`: an earthy palette (parchment and bark, alpenglow gold, dogwood rust, sequoia green, Merced blue-grey), every colour a CSS token, light and dark following the system setting. No fonts, images or scripts load from the internet.
+
+- **Landing page** (`/`). The hostname, one soft raised button per listed service (it opens `http://<host you used>:<port>/`), the lock link to `/admin`, and "No services yet" when none is listed.
+- **Admin page** (`/admin`). A top bar with the hostname, a link back to the services and **Log out** (`POST /admin/api/logout`: ends this session and clears the cookie). Below it, cards in three columns that fit 1366x768 and 1920x1080 with no page scroll (long lists scroll inside their card); on a phone they stack in one column.
+  - **Stats**: load, CPU percent, temperature, uptime, memory and disk bars. Refreshes every 5 s; **Pause** stops that, the round button refreshes now, and the time shows when it last updated.
+  - **Services**, **Wi-Fi**, **Power**: as described below. Every confirm dialog and two-step call is unchanged.
+  - **Camera**: offload state, last result and when, and free space on the camera drive (from `/admin/api/system`). Without a `status.json` it says "no status yet".
+  - **System**: hostname, addresses, OS, kernel, architecture, hub revision, time and zone, boot time.
+  - **Password**: current, new, repeat new and an optional reminder hint (empty keeps the stored one). The page checks the same rules as the server first and shows errors under each field; 401, 400 and 429 from the server are shown too. The light bulb shows the stored hint while hovered, focused or after a tap (Escape hides it). The hint is never shown on the login screen.
+
+Checks: `hub/web/check.sh` runs on the laptop and prints PASS or FAIL for layout fit (Playwright, `screenshots` skill), colour contrast (`hub/web/check-contrast.mjs`, WCAG AA for every pair in both themes), a screenshot of every state in both themes, and `hub/dev/flows.mjs`, which drives the page through switch, Wi-Fi, power, hint, password and logout.
+
+### Laptop sandbox
+
+`hub/dev/run.sh` builds the hub and runs it at `http://127.0.0.1:18090/` (password `sandbox-pass`) inside `bwrap`, with fake `nmcli`, `systemctl` and `systemd-run` from `hub/dev/bin` mounted over the real ones, so nothing touches the laptop's Wi-Fi, services or power. `hub/dev/scenario.sh` changes what the fakes report: `wifi client|hotspot-demand|hotspot-fallback|keep|none|broken|fail-up`, `services normal|off|warnings`, `camera ok|copying|none`, or `reset`. `hub/dev/run.sh stop` ends it.
+
+## Password
 
 Set or change the password over SSH (it is read from stdin, 8 characters minimum):
 

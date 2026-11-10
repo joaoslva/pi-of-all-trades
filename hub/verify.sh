@@ -2,7 +2,8 @@
 #
 # Build and deploy the hub, then check the real Pi over SSH.
 # One PASS/FAIL/SKIP line per check; exits non-zero on any FAIL.
-# Reboots the Pi only when PIHUB_TEST_POWER=1.
+# Reboots the Pi only when PIHUB_TEST_POWER=1. NO_WIFI_SWITCH=1 skips the one check that
+# really switches the Pi's Wi-Fi (H4 wrong-password revert).
 #
 #   hub/verify.sh                    # PI=joao@192.168.1.206 by default
 set -uo pipefail
@@ -52,6 +53,21 @@ if wait_for 10 landing_ok; then
   fi
 else
   report "landing page on :80 has Camera button to :8081" 1 "port 80 not 200"
+fi
+
+# H6: the pages
+[ "$(code "http://$HOST/admin")" = 200 ] && report "/admin answers 200" 0 || report "/admin answers 200" 1 "got $(code "http://$HOST/admin")"
+[ "$(code "http://$HOST/theme.css")" = 200 ] && report "/theme.css answers 200" 0 || report "/theme.css answers 200" 1
+grep -q 'class="lock" href="/admin"' <<<"${page:-}" && report "landing page has the lock link to /admin" 0 || report "landing page has the lock link to /admin" 1
+FIT="$HOME/.claude/tools/playwright/check-fit.mjs"
+if [ -e "$FIT" ]; then
+  for t in "" --dark; do
+    out="$(node "$FIT" "http://$HOST/" --sizes 1366x768,1920x1080 --hscroll-only 390x844 $t 2>&1)"
+    [ $? = 0 ] && report "landing page fits 1366x768 and 1920x1080, no sideways scroll at 390 ${t:-light}" 0 ||
+      report "landing page fits 1366x768 and 1920x1080, no sideways scroll at 390 ${t:-light}" 1 "$(tr '\n' ' ' <<<"$out")"
+  done
+else
+  report "landing page layout fit" skip "no $FIT"
 fi
 
 c="$(code "http://$HOST:8081/")"
@@ -307,7 +323,9 @@ SH
 
   # (a) wrong password for our own SSID: the Pi must come back by itself
   H4_TEST_CON="$SSID"
-  if pi "nmcli -t -f NAME connection show | grep -qxF '$SSID'"; then
+  if [ -n "${NO_WIFI_SWITCH:-}" ]; then
+    H4_TEST_CON=""; report "wrong-password revert (really switches the Pi's Wi-Fi)" skip "NO_WIFI_SWITCH is set"
+  elif pi "nmcli -t -f NAME connection show | grep -qxF '$SSID'"; then
     H4_TEST_CON=""; report "wrong-password revert" skip "a profile named $SSID already exists"
   else
     pi 'sudo -n systemd-run --quiet --unit=pihub-verify-safety --on-active=300 nmcli connection up id camera-drive-wifi' &&
