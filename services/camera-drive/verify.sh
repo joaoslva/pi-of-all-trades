@@ -8,10 +8,10 @@
 # in a copy). The real camera is only ever looked at read-only: nothing here
 # mounts /dev/sd*, writes /srv/camera-drive, or runs wipe against it.
 #
-#   app/verify.sh                    # PI=joao@192.168.1.206 by default
+#   services/camera-drive/verify.sh                    # PI=joao@192.168.1.206 by default
 set -uo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PI="${PI:-joao@192.168.1.206}"
 KEY="${KEY:-$HOME/.ssh/pi_camera_drive}"
 PYREF="${PYREF:-65c643e}" # last commit that still has the Python camera-offload and camera-wipe
@@ -35,11 +35,11 @@ read -r -t 20 lock <&"${LOCK[0]}"
 [ "$lock" = locked ] || { echo "FAIL  lock (another verify is running, or the Pi is unreachable)"; exit 1; }
 
 echo "== unit tests"
-make -C "$REPO/app" test >/dev/null && report "go vet and go test" 0 || { report "go vet and go test" 1; exit 1; }
-make -C "$REPO/app" build || { echo "FAIL  build"; exit 1; }
-echo "== deploy --check (before)"; "$REPO/platform/deploy.sh" --check app || { echo "FAIL  deploy --check"; exit 1; }
-echo "== deploy"; "$REPO/platform/deploy.sh" app || { echo "FAIL  deploy"; exit 1; }
-echo "== deploy --check (after)"; "$REPO/platform/deploy.sh" --check app
+make -C "$REPO/services/camera-drive" test >/dev/null && report "go vet and go test" 0 || { report "go vet and go test" 1; exit 1; }
+make -C "$REPO/services/camera-drive" build || { echo "FAIL  build"; exit 1; }
+echo "== deploy --check (before)"; "$REPO/platform/deploy.sh" --check camera-drive || { echo "FAIL  deploy --check"; exit 1; }
+echo "== deploy"; "$REPO/platform/deploy.sh" camera-drive || { echo "FAIL  deploy"; exit 1; }
+echo "== deploy --check (after)"; "$REPO/platform/deploy.sh" --check camera-drive
 echo "== checks"
 
 # ---- real camera: read-only -------------------------------------------------
@@ -73,7 +73,7 @@ grep -q 'no camera video device found' <<<"$nodev" && grep -q '^rc=1$' <<<"$node
 
 # Real camera in live mode. These record into /srv/camera-drive/video and snapshot into media/snapshots
 # (each check removes only the files it made), and the SIGTERM check stops and restarts the production
-# camera-live. So they only run when asked: REAL_CAMERA=1 app/verify.sh
+# camera-live. So they only run when asked: REAL_CAMERA=1 services/camera-drive/verify.sh
 if ! pi lsusb | grep -q '08ca:2022'; then
   for n in "preview reaches live.jpg" "snapshot appears" "three record cycles give three valid files" "SIGTERM mid-recording leaves a valid file"; do
     report "real camera (live): $n" skip "camera not in live mode (08ca:2022 absent)"
