@@ -22,3 +22,22 @@ func TestParseStatsBad(t *testing.T) {
 		t.Fatal("meminfo without MemAvailable parsed")
 	}
 }
+
+func TestCPUPercent(t *testing.T) {
+	// user nice system idle iowait irq softirq steal guest guest_nice
+	s1 := "cpu  100 0 100 700 100 0 0 0 5 0\ncpu0 1 2 3 4 5 6 7 8 9 10\n"
+	s2 := "cpu  200 0 150 750 100 0 0 0 5 0\n"
+	var c cpuSampler
+	if p, err := c.percent(s1); err != nil || p != 20 { // since boot: 200 busy of 1000
+		t.Fatalf("first: %v %v", p, err)
+	}
+	if p, err := c.percent(s2); err != nil || p != 75 { // 150 busy of 200
+		t.Fatalf("second: %v %v", p, err)
+	}
+	if p, _ := c.percent(s2); p != 0 {
+		t.Fatalf("no time passed: %v", p)
+	}
+	if _, err := c.percent("intr 5\n"); err == nil {
+		t.Fatal("no cpu line parsed")
+	}
+}
