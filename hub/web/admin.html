@@ -14,6 +14,7 @@
   .warn { border: 1px solid #c60; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
   .svc { border: 1px solid; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
   .svc small { opacity: .7; display: block; }
+  .row { display: flex; gap: 8px; } .row button { width: auto; flex: 1; }
 </style>
 </head>
 <body>
@@ -28,6 +29,23 @@
   <dl id="stats"></dl>
   <h2>Services</h2>
   <div id="services"></div>
+  <h2>Wi-Fi</h2>
+  <dl id="wifi"></dl>
+  <div id="keep" class="warn" hidden>
+    <p id="keeptext"></p>
+    <button id="keepbtn">Keep this network</button>
+  </div>
+  <h3>Saved networks</h3>
+  <div id="saved"></div>
+  <h3>Nearby networks</h3>
+  <button id="scanbtn">Scan</button>
+  <div id="nearby"></div>
+  <h3>Add a network</h3>
+  <form id="add">
+    <input name="ssid" placeholder="Network name (SSID)" maxlength="32" required>
+    <input name="password" type="password" placeholder="Password (empty for an open network)" autocomplete="off">
+    <button>Save network</button>
+  </form>
   <button data-power="reboot">Reboot</button>
   <button data-power="poweroff">Power off</button>
   <p id="msg"></p>
@@ -70,11 +88,74 @@ async function ask(verb, s) {
   $('msg').textContent = r.ok ? 'Done.' : 'Failed: ' + await r.text();
   loadServices();
 }
+// Wi-Fi. Every change is two calls: the first returns a nonce, the second runs it.
+async function wifiCall(op, body, question) {
+  if (!confirm(question)) return null;
+  const url = '/admin/api/wifi/' + op;
+  const one = await post(url, JSON.stringify(body));
+  if (!one.ok) { $('msg').textContent = 'Failed: ' + await one.text(); return null; }
+  const {nonce} = await one.json();
+  const r = await post(url, JSON.stringify({...body, nonce}));
+  if (!r.ok) { $('msg').textContent = 'Failed: ' + await r.text(); return null; }
+  return r.status === 204 ? {} : r.json();
+}
+let wifiKnown = {};
+async function loadWifi() {
+  const r = await fetch('/admin/api/wifi');
+  if (!r.ok) return;
+  const d = await r.json();
+  wifiKnown = d;
+  const rows = {Mode: d.mode === 'hotspot' ? 'Pi hotspot (no internet)' : d.mode === 'client' ? 'Connected to a network' : 'Not connected',
+    Network: d.ssid || 'none', Address: d.ip ? d.ip + ' / ' + d.hostname : d.hostname,
+    'Hotspot fallback': d.fallback_timer === 'active' ? 'watching' : 'NOT RUNNING (' + d.fallback_timer + ')'};
+  $('wifi').replaceChildren(...Object.entries(rows).flatMap(([k, v]) => [text('dt', k), text('dd', v)]));
+  $('saved').replaceChildren(...d.saved.map(n => {
+    const box = text('div', '', 'svc');
+    box.append(text('strong', n.name + (n.active ? ' (in use)' : n.hotspot ? ' (hotspot)' : '')), text('small', n.ssid));
+    if (!n.active && !n.hotspot) {
+      const row = text('div', '', 'row');
+      const go = text('button', 'Connect');
+      go.onclick = () => connectTo(n.name);
+      const del = text('button', 'Forget');
+      del.onclick = async () => { if (await wifiCall('forget', {name: n.name}, 'Forget ' + n.name + '?')) loadWifi(); };
+      row.append(go, del); box.append(row);
+    }
+    return box;
+  }));
+  $('keep').hidden = !d.revert_armed;
+  if (d.revert_armed) $('keeptext').textContent = 'A network switch is waiting. If you can read this at the new address, keep it; otherwise the previous network returns by itself within ' + d.revert_seconds + ' s.';
+  if (d.mode === 'hotspot') $('nearby').replaceChildren(text('p', 'Scanning is off in hotspot mode because it would drop the hotspot. Enter the network name by hand below.'));
+}
+async function scan() {
+  const r = await fetch('/admin/api/wifi/scan');
+  if (!r.ok) { $('nearby').replaceChildren(text('p', r.status === 409 ? await r.text() : 'Scan failed: ' + await r.text())); return; }
+  const {networks} = await r.json();
+  $('nearby').replaceChildren(...networks.map(n => {
+    const b = text('button', n.ssid + ' · ' + n.signal + '%' + (n.security ? ' · ' + n.security : ' · open'));
+    b.onclick = () => { $('add').ssid.value = n.ssid; $('add').password.focus(); };
+    return b;
+  }));
+}
+async function connectTo(name) {
+  const prev = wifiKnown.ssid || 'the current network';
+  const res = await wifiCall('connect', {name}, 'Switch Wi-Fi to ' + name + '? This page may disconnect. Unless you press Keep within ' + wifiKnown.revert_seconds + ' s, the Pi goes back to ' + prev + '.');
+  if (!res) return;
+  $('msg').textContent = 'Switched. Open http://' + (res.ip || res.hostname) + '/admin and press Keep this network' + (res.ip ? ' (also ' + res.hostname + ')' : '') + '.';
+  loadWifi();
+}
+$('keepbtn').onclick = async () => {
+  if (await wifiCall('keep', {}, 'Keep this network?')) { $('msg').textContent = 'Kept.'; loadWifi(); }
+};
+$('add').onsubmit = async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target));
+  if (await wifiCall('add', body, 'Save ' + body.ssid + '?')) { e.target.reset(); $('msg').textContent = 'Saved. Use Connect to switch to it.'; loadWifi(); }
+};
 async function refresh() {
   const r = await fetch('/admin/api/stats');
   $('login').hidden = r.ok; $('main').hidden = !r.ok;
   if (!r.ok) return;
-  loadServices();
+  loadServices(); loadWifi();
   const s = await r.json();
   const gb = b => (b / 1e9).toFixed(1) + ' GB', mb = k => Math.round(k / 1024) + ' MB';
   const up = Math.floor(s.uptime_s / 60);
@@ -101,6 +182,7 @@ document.querySelectorAll('[data-power]').forEach(b => b.onclick = async () => {
   $('msg').textContent = r.ok ? 'Done. The Pi is going down.' : 'Failed: ' + await r.text();
 });
 refresh(); setInterval(refresh, 5000);
+$('scanbtn').onclick = scan;
 </script>
 </body>
 </html>

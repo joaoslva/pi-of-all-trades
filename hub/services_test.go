@@ -60,7 +60,7 @@ func TestIndexHref(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Host = "pi.test:80"
 	rec := httptest.NewRecorder()
-	newHandler(services, NewAuth(""), nil).ServeHTTP(rec, req)
+	newHandler(services, NewAuth(""), nil, nil).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}

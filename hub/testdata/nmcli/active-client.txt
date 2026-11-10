@@ -1,0 +1,2 @@
+camera-drive-wifi:wlan0
+lo:lo

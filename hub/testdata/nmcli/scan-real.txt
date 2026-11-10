@@ -1,0 +1,1 @@
+*:89:WPA1 WPA2:HomeNet

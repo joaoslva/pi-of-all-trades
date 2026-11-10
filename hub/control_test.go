@@ -183,7 +183,7 @@ func TestViewMemoryUnknownIsNull(t *testing.T) {
 func TestSwitchNonceBoundToAction(t *testing.T) {
 	f := newFixture(t)
 	c, sd := newControl(t)
-	f.h = newHandler(testServices(), f.a, c)
+	f.h = newHandler(testServices(), f.a, c, nil)
 	cookie := f.session(t)
 	step := func(path, body string) (int, string) {
 		rec := f.do("POST", path, body, nil, cookie)
@@ -229,7 +229,7 @@ func TestLandingHidesBackgroundAndPortless(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := newFixture(t)
-	f.h = newHandler(services, f.a, nil)
+	f.h = newHandler(services, f.a, nil, nil)
 	body := f.do("GET", "/", "", nil, nil).Body.String()
 	if !strings.Contains(body, "Alpha") || strings.Contains(body, "Offl") || strings.Contains(body, "Pback") {
 		t.Fatalf("landing:\n%s", body)

@@ -1,5 +1,6 @@
-// The hub runs as joao without sudo. It may reboot, power off, and start or
-// stop the unit names listed below (add a new service's units here), nothing else.
+// The hub runs as joao without sudo. It may reboot, power off, start or stop the
+// unit names listed below (add a new service's units here), manage Wi-Fi profiles
+// in NetworkManager, and arm or cancel its own Wi-Fi revert timer. Nothing else.
 polkit.addRule(function (action, subject) {
     if (subject.user !== "joao") {
         return polkit.Result.NOT_HANDLED;
@@ -13,7 +14,24 @@ polkit.addRule(function (action, subject) {
     if (power.indexOf(action.id) >= 0) {
         return polkit.Result.YES;
     }
+    // The hub has no login session, so NetworkManager's stock rule (active local
+    // sessions only) does not cover it. These are what nmcli add, delete, up and scan need.
+    var nm = [
+        "org.freedesktop.NetworkManager.settings.modify.system",
+        "org.freedesktop.NetworkManager.network-control",
+        "org.freedesktop.NetworkManager.wifi.scan"
+    ];
+    if (nm.indexOf(action.id) >= 0) {
+        return polkit.Result.YES;
+    }
     var units = ["camera-drive-web.service", "camera-live.service"];
+    // pihub-wifi-revert is the transient timer and service that undo an unkept Wi-Fi switch.
+    var revert = ["pihub-wifi-revert.service", "pihub-wifi-revert.timer"];
+    if (action.id === "org.freedesktop.systemd1.manage-units" &&
+        revert.indexOf(action.lookup("unit")) >= 0 &&
+        ["start", "stop"].indexOf(action.lookup("verb")) >= 0) {
+        return polkit.Result.YES;
+    }
     var verbs = ["start", "stop", "restart"];
     if (action.id === "org.freedesktop.systemd1.manage-units" &&
         units.indexOf(action.lookup("unit")) >= 0 &&

@@ -32,7 +32,7 @@ type linkView struct {
 
 // newHandler serves the landing page. Buttons are plain redirects to each
 // service's own port on whatever host the browser used to reach us.
-func newHandler(services []Service, auth *Auth, ctl *Control) http.Handler {
+func newHandler(services []Service, auth *Auth, ctl *Control, wifi *Wifi) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin", auth.adminPage)
 	mux.HandleFunc("POST /admin/api/login", auth.login)
@@ -42,6 +42,11 @@ func newHandler(services []Service, auth *Auth, ctl *Control) http.Handler {
 		mux.HandleFunc("GET /admin/api/services", auth.require(ctl.list))
 		mux.HandleFunc("POST /admin/api/switch", auth.require(ctl.twoStep(auth, "switch", ctl.Switch)))
 		mux.HandleFunc("POST /admin/api/stop", auth.require(ctl.twoStep(auth, "stop", ctl.Stop)))
+	}
+	if wifi != nil {
+		mux.HandleFunc("GET /admin/api/wifi", auth.require(wifi.status))
+		mux.HandleFunc("GET /admin/api/wifi/scan", auth.require(wifi.scan))
+		mux.HandleFunc("POST /admin/api/wifi/{op}", auth.require(wifi.op(auth)))
 	}
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
@@ -95,7 +100,11 @@ func main() {
 	dir := flag.String("services-dir", "/etc/pihub/services.d", "directory of service JSON files")
 	stateDir := flag.String("state-dir", "/var/lib/pihub", "directory for state.json")
 	hash := flag.String("hash-file", defaultHashFile, "admin password hash file")
+	revert := flag.Int("wifi-revert", 60, "seconds before an unkept Wi-Fi switch is undone (10-80: the fallback ignores the switching flag after 90 s)")
 	flag.Parse()
+	if *revert < 10 || *revert > 80 {
+		log.Fatal("--wifi-revert must be between 10 and 80")
+	}
 	services, err := LoadServices(*dir)
 	if err != nil {
 		log.Fatal(err)
@@ -105,5 +114,5 @@ func main() {
 		log.Printf("reconcile: %v", err) // the hub still serves; the admin page shows what is running
 	}
 	log.Printf("pihub: %d service(s), listening on %s", len(services), *listen)
-	log.Fatal(http.ListenAndServe(*listen, newHandler(services, NewAuth(*hash), ctl)))
+	log.Fatal(http.ListenAndServe(*listen, newHandler(services, NewAuth(*hash), ctl, NewWifi(systemctl{}, *revert))))
 }
