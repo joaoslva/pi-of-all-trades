@@ -4,7 +4,7 @@ The Pi becomes a small host for services. A Go binary called `pihub` owns port 8
 
 Rule for the whole program. Every service is a systemd unit plus a JSON file, and the hub is the only thing that starts or stops them.
 
-Branches in order are H1, H2, H3, H4 (hub) and C1, C2, C3, C4 (camera).
+Branches in order are H1, H2, H3, H4 (hub) and C1, C2, C3, C4 (camera). H5 (service passwords) is benched and H6 (visual polish) is for later.
 
 ## How we work
 
@@ -97,6 +97,10 @@ Checks.
 - `verify.sh`. A deliberately wrong password returns to the TP-Link network within 60 s and `ssh` still works. While a switch is in flight the fallback does not raise the hotspot. With no known network the hotspot comes up and `http://10.42.0.1/admin` loads. `kill -9 pihub` while in hotspot mode leaves the hotspot up. The fallback timer is active after a reboot.
 - Memory. Under 23 MB.
 
+## H6. Visual improvements to the hub and admin pages
+
+Later, after H3 and H4, and not before the operator asks. Scope is the look of `hub/web/index.html` and `hub/web/admin.html` only: spacing, type, colour, service cards, a clearer service table and warning banner, dark mode, and a check at phone width. No new behaviour and no new dependencies. Checks are the existing `hub/verify.sh` plus a screenshot of each page at 390 px width reviewed by the operator.
+
 ## C1. Offload and wipe in Go
 
 Files.
@@ -139,8 +143,9 @@ Files.
 - Edit `app/main.go` to add `web --listen`.
 
 Build.
-- Routes `/`, `/api/state`, `/api/stream`, `/api/live.jpg`, `/api/play/`, `/api/control`, `/api/power`, `/api/wipe`, `/media/`, `/thumb/`, `/api/zip` on `net/http`.
+- Routes `/`, `/api/state`, `/api/stream`, `/api/live.jpg`, `/api/play/`, `/api/control`, `/api/wipe`, `/media/`, `/thumb/`, `/api/zip` on `net/http`.
 - One function `safeMediaPath(rel)` resolves under `media/` and `video/` only and refuses symlinks that escape. Every file route calls it.
+- The camera app loses its power-off button. Drop the `/api/power` route and the Power button from `app/web/page.html`, so the admin page is the only place that turns the Pi off. This is the one deliberate edit to the otherwise verbatim page, and the Python app keeps its button until C4 deletes it.
 - Thumbnails use the existing ffmpeg command for both videos and images, so no image library.
 - `WriteTimeout` is 0 and streams flush every frame.
 - The unit still points at the Python app. The Go app runs beside it on port 8082 for the checks only.
