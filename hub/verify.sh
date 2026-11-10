@@ -83,7 +83,7 @@ fi
 
 # --- H2: admin login, stats, power. The throwaway password's hash is removed on exit.
 HASH=/etc/pihub/admin.hash
-JAR="$(mktemp)"; ours_hash=1; T=""; live_before=""
+JAR="$(mktemp)"; ours_hash=1; T=""; live_before=""; h3_live_starts=0
 cleanup() {
   rm -f "$JAR"
   [ "$ours_hash" = 1 ] && pi "sudo -n rm -f $HASH" 2>/dev/null # only a hash this run created
@@ -186,10 +186,10 @@ else
   [ "$code" = 204 ] && [ "$both_off" = "inactive " ] && report "Camera off stops camera-drive-web and camera-live together" 0 || report "Camera off stops camera-drive-web and camera-live together" 1 "http $code, units: $both_off"
   [ "$(pi "cat $T/state.json")" = '{"active":""}' ] && report "state says off after Camera off" 0 || report "state says off after Camera off" 1 "$(pi "cat $T/state.json")"
 
-  n="$(nonce_for switch)"
+  n="$(nonce_for switch)"; h3_live_starts=1
   secs="$(pi "s=\$(date +%s.%N); c=\$(curl -s -o /dev/null -m 60 -b $T/jar -w '%{http_code}' -d '{\"id\":\"camera\",\"nonce\":\"$n\"}' $H3/admin/api/switch)
     until [ \"\$(curl -s -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:8081/)\" = 200 ]; do sleep 0.2; [ \$(( \$(date +%s) - \${s%.*} )) -gt 60 ] && { echo timeout; exit 1; }; done
-    echo \$c \$(echo \"\$(date +%s.%N) - \$s\" | bc)")"
+    echo \$c \$(awk -v e=\$(date +%s.%N) -v s=\$s 'BEGIN{printf \"%.2f\", e-s}')")"
   echo "INFO  confirm to camera page answering again: $secs (http code, seconds)"
   on="$(pi 'systemctl is-active camera-drive-web camera-live | sort -u | tr "\n" " "')"
   case "$secs" in 204*) [ "$on" = "active " ] && report "Camera on starts both units and :8081 answers" 0 "$secs" || report "Camera on starts both units and :8081 answers" 1 "units: $on" ;;
@@ -259,10 +259,12 @@ if grep -q '08ca:2023' <<<"$usb"; then
   [ "$n" = 1 ] && report "camera plugged in (storage) starts camera-offload@ once" 0 || report "camera plugged in (storage) starts camera-offload@ once" 1 "started $n times"
 elif grep -q '08ca:2022' <<<"$usb"; then
   n="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
-  if [ "$n" = 1 ] && pi 'systemctl -q is-active camera-live'; then
-    report "camera plugged in (live) has camera-live active, started once" 0
+  # One start per plug-in (kernel log), plus the one H3's own Camera-on switch made.
+  plugs="$(pi 'journalctl -b -k --no-pager | grep -c "idVendor=08ca, idProduct=2022"')"
+  if [ "$n" = "$((plugs + h3_live_starts))" ] && pi 'systemctl -q is-active camera-live'; then
+    report "camera plugged in (live) has camera-live active, started once per plug-in" 0 "$n starts, $plugs plug-in(s), $h3_live_starts from H3"
   else
-    report "camera plugged in (live) has camera-live active, started once" 1 "started $n times"
+    report "camera plugged in (live) has camera-live active, started once per plug-in" 1 "$n starts, $plugs plug-in(s), $h3_live_starts from H3"
   fi
 else
   [ "$had_camera" = 1 ] && report "camera came back after reboot" 1 "08ca:202x gone" ||
