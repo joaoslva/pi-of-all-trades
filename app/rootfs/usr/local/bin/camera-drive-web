@@ -3,7 +3,7 @@
 The phone-facing web UI for camera-drive.
 
 Runs unprivileged as joao. The only privileged things it can do are shell out
-to `sudo camera-wipe` (which enforces its own safety rule independently) and
+to `sudo camera-drive wipe` (which enforces its own safety rule independently) and
 `sudo systemctl poweroff`. This app is never trusted to decide what is safe to
 delete.
 
@@ -739,7 +739,7 @@ def api_wipe():
     commit = bool(request.json and request.json.get("commit"))
     flag = "--commit" if commit else "--dry-run"
     try:
-        res = subprocess.run(["sudo", "-n", "/usr/local/bin/camera-wipe", flag],
+        res = subprocess.run(["sudo", "-n", "/usr/local/bin/camera-drive", "wipe", flag],
                              capture_output=True, text=True, timeout=900)
     except subprocess.SubprocessError as exc:
         return jsonify({"ok": False, "errors": [str(exc)]}), 500
@@ -747,7 +747,7 @@ def api_wipe():
         payload = json.loads(res.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         return jsonify({"ok": False,
-                        "errors": ["could not parse camera-wipe output",
+                        "errors": ["could not parse camera-drive wipe output",
                                    res.stdout[-400:], res.stderr[-400:]]}), 500
     return jsonify(payload)
 
