@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -21,7 +22,10 @@ var webFS embed.FS
 //go:embed web/admin.html
 var adminHTML []byte
 
-const defaultHashFile = "/etc/pihub/admin.hash"
+const (
+	defaultHashFile = "/var/lib/pihub/admin.hash"
+	legacyHashFile  = "/etc/pihub/admin.hash"
+)
 
 var indexTmpl = template.Must(template.ParseFS(webFS, "web/index.html"))
 
@@ -43,6 +47,7 @@ func newHandler(services []Service, auth *Auth, ctl *Control, wifi *Wifi) http.H
 		mux.HandleFunc("POST /admin/api/switch", auth.require(ctl.twoStep(auth, "switch", ctl.Switch)))
 		mux.HandleFunc("POST /admin/api/stop", auth.require(ctl.twoStep(auth, "stop", ctl.Stop)))
 	}
+	registerAccount(mux, auth)
 	if wifi != nil {
 		mux.HandleFunc("GET /admin/api/wifi", auth.require(wifi.status))
 		mux.HandleFunc("GET /admin/api/wifi/scan", auth.require(wifi.scan))
@@ -71,7 +76,7 @@ func newHandler(services []Service, auth *Auth, ctl *Control, wifi *Wifi) http.H
 func passwd(args []string) error {
 	fs := flag.NewFlagSet("passwd", flag.ExitOnError)
 	file := fs.String("file", defaultHashFile, "hash file to write")
-	group := fs.String("group", "joao", "group that may read the hash file")
+	owner := fs.String("user", "joao", "user that owns the hash file (the hub's user)")
 	fs.Parse(args)
 	tty := exec.Command("stty", "-echo")
 	tty.Stdin = os.Stdin
@@ -86,7 +91,7 @@ func passwd(args []string) error {
 		fmt.Fprint(os.Stderr, "New admin password: ")
 	}
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	return setPassword(*file, *group, strings.TrimRight(line, "\r\n"))
+	return setPassword(*file, *owner, strings.TrimRight(line, "\r\n"))
 }
 
 func main() {
@@ -99,11 +104,16 @@ func main() {
 	listen := flag.String("listen", ":80", "address to listen on")
 	dir := flag.String("services-dir", "/etc/pihub/services.d", "directory of service JSON files")
 	stateDir := flag.String("state-dir", "/var/lib/pihub", "directory for state.json")
-	hash := flag.String("hash-file", defaultHashFile, "admin password hash file")
+	hash := flag.String("hash-file", "", "admin password hash file (default <state-dir>/admin.hash)")
+	camDir := flag.String("camera-dir", "/srv/camera-drive", "camera drive directory, read for the system info")
 	revert := flag.Int("wifi-revert", 30, "seconds before an unkept Wi-Fi switch is undone (10-80: the fallback ignores the switching flag after 90 s)")
 	flag.Parse()
 	if *revert < 10 || *revert > 80 {
 		log.Fatal("--wifi-revert must be between 10 and 80")
+	}
+	if *hash == "" {
+		*hash = filepath.Join(*stateDir, "admin.hash")
+		migrateHash(legacyHashFile, *hash)
 	}
 	services, err := LoadServices(*dir)
 	if err != nil {
@@ -113,8 +123,10 @@ func main() {
 	if err := ctl.Reconcile(); err != nil {
 		log.Printf("reconcile: %v", err) // the hub still serves; the admin page shows what is running
 	}
-	wifi := NewWifi(systemctl{}, *revert, *stateDir)
+wifi := NewWifi(systemctl{}, *revert, *stateDir)
 	wifi.Status() // records the network we are on as the last working one
+	auth := NewAuth(*hash)
+	auth.cameraDir = *camDir
 	log.Printf("pihub: %d service(s), listening on %s", len(services), *listen)
-	log.Fatal(http.ListenAndServe(*listen, newHandler(services, NewAuth(*hash), ctl, wifi)))
+	log.Fatal(http.ListenAndServe(*listen, newHandler(services, auth, ctl, wifi)))
 }

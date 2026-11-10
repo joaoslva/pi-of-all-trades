@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -65,9 +66,10 @@ func verifyPassword(stored, pw string) bool {
 
 // Auth holds the admin sessions, power nonces and login rate limit, all in memory.
 type Auth struct {
-	hashFile string
-	now      func() time.Time
-	run      func(args ...string) error // systemctl; swapped in tests
+	hashFile  string
+	cameraDir string // read by /admin/api/system
+	now       func() time.Time
+	run       func(args ...string) error // systemctl; swapped in tests
 
 	mu       sync.Mutex
 	sessions map[string]time.Time // token -> last seen
@@ -82,12 +84,13 @@ type nonce struct {
 
 func NewAuth(hashFile string) *Auth {
 	return &Auth{
-		hashFile: hashFile,
-		now:      time.Now,
-		run:      func(args ...string) error { return exec.Command("systemctl", args...).Run() },
-		sessions: map[string]time.Time{},
-		nonces:   map[string]nonce{},
-		logins:   map[string][]time.Time{},
+		hashFile:  hashFile,
+		cameraDir: "/srv/camera-drive",
+		now:       time.Now,
+		run:       func(args ...string) error { return exec.Command("systemctl", args...).Run() },
+		sessions:  map[string]time.Time{},
+		nonces:    map[string]nonce{},
+		logins:    map[string][]time.Time{},
 	}
 }
 
@@ -135,6 +138,17 @@ func (a *Auth) allow(client string) bool {
 	}
 	a.logins[client] = append(recent, now)
 	return true
+}
+
+// dropOtherSessions logs out everyone except the session with token keep.
+func (a *Auth) dropOtherSessions(keep string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for t := range a.sessions {
+		if t != keep {
+			delete(a.sessions, t)
+		}
+	}
 }
 
 func (a *Auth) valid(r *http.Request) bool {
@@ -271,8 +285,26 @@ func (a *Auth) adminPage(w http.ResponseWriter, r *http.Request) {
 	w.Write(adminHTML)
 }
 
-// setPassword is `pihub passwd`: run as root, writes the hash readable by the hub's group only.
-func setPassword(file, group, pw string) error {
+// writeFileAtomic writes tmp + fsync + rename, so readers see the old or the new file, never half.
+// uid/gid -1 leave the owner alone.
+func writeFileAtomic(path string, data []byte, mode os.FileMode, uid, gid int) error {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp*")
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(data)
+	err = errors.Join(werr, f.Chmod(mode), f.Sync(), f.Close(), os.Chown(f.Name(), uid, gid))
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+	}
+	return err
+}
+
+// setPassword is `pihub passwd`: run as root, writes the hash owned by the hub's user, mode 0600.
+func setPassword(file, username, pw string) error {
 	if len(pw) < minPasswordN {
 		return fmt.Errorf("password must be at least %d characters", minPasswordN)
 	}
@@ -280,18 +312,28 @@ func setPassword(file, group, pw string) error {
 	if err != nil {
 		return err
 	}
-	g, err := user.LookupGroup(group)
+	u, err := user.Lookup(username)
 	if err != nil {
 		return err
 	}
-	gid, _ := strconv.Atoi(g.Gid)
-	tmp := filepath.Join(filepath.Dir(file), ".admin.hash.tmp")
-	if err := os.WriteFile(tmp, []byte(h+"\n"), 0o640); err != nil {
-		return err
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+	return writeFileAtomic(file, []byte(h+"\n"), 0o600, uid, gid)
+}
+
+// migrateHash copies the pre-H7 hash (root:joao 0640, in /etc, which the hub cannot write)
+// to the state dir once, so the operator's password keeps working.
+func migrateHash(oldFile, newFile string) {
+	if _, err := os.Stat(newFile); err == nil {
+		return
 	}
-	if err := errors.Join(os.Chmod(tmp, 0o640), os.Chown(tmp, 0, gid)); err != nil {
-		os.Remove(tmp)
-		return err
+	b, err := os.ReadFile(oldFile)
+	if err != nil {
+		return
 	}
-	return os.Rename(tmp, file)
+	if err := writeFileAtomic(newFile, b, 0o600, -1, -1); err != nil {
+		log.Printf("hash migration failed: %v", err)
+		return
+	}
+	log.Printf("copied admin hash %s to %s", oldFile, newFile)
 }

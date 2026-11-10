@@ -367,6 +367,8 @@ SH
 fi
 echo "INFO  after H4: active=$(pi "nmcli -t -f NAME connection show --active | head -1") profiles=$(pi "nmcli -t -f NAME connection show | tr '\n' ' '") timer=$(pi 'systemctl is-active camera-net-fallback.timer')"
 
+. "$REPO/hub/verify_account.sh" # H7: password change, hint, system info, cpu_percent
+
 if [ "${PIHUB_TEST_POWER:-}" = 1 ] && [ -z "${NO_REBOOT:-}" ]; then
 # Never reboot in the middle of an offload.
 idle() { [ -z "$(pi 'systemctl list-units "camera-offload@*" --state=activating,active --no-legend')" ]; }
