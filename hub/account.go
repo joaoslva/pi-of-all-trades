@@ -14,7 +14,7 @@ import (
 const maxHint = 120
 
 func registerAccount(mux *http.ServeMux, a *Auth) {
-	mux.HandleFunc("GET /admin/api/hint", a.hint)
+	mux.HandleFunc("GET /admin/api/hint", a.require(a.hint))
 	mux.HandleFunc("POST /admin/api/password", a.require(a.changePassword))
 	mux.HandleFunc("GET /admin/api/system", a.require(a.system))
 }
@@ -27,7 +27,7 @@ func (a *Auth) readHint() string {
 	return strings.TrimSpace(string(b))
 }
 
-// hint is unauthenticated on purpose: the login screen shows it.
+// hint needs a session: only the logged-in password card shows it.
 func (a *Auth) hint(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(map[string]string{"hint": a.readHint()})

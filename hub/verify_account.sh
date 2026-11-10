@@ -7,6 +7,7 @@ PW7="verify7-$RANDOM$RANDOM$RANDOM"; NEW7="changed7-$RANDOM$RANDOM$RANDOM"
 T7="$(pi mktemp -d)"
 h7_cleanup() { [ -n "$T7" ] && pi "kill \$(cat $T7/pid) 2>/dev/null; pkill -f 'while :; do :; done' 2>/dev/null; rm -rf $T7" 2>/dev/null; }
 trap 'h7_cleanup; cleanup' EXIT
+hint7() { api7 "-b $T7/j1 $H7/admin/api/hint"; }
 api7() { pi "curl -s -m 20 $1"; }
 st7() { pi "curl -s -o /dev/null -m 20 -w '%{http_code}' $1"; } # status code only
 login7() { st7 "-c $T7/$2 --data-urlencode password=$1 $H7/admin/api/login"; }
@@ -19,8 +20,9 @@ if [ "$(login7 "$PW7" j1)" != 204 ]; then
   report "H7 throwaway hub starts and logs in" 1 "$(pi "tail -3 $T7/log")"
 else
   login7 "$PW7" j2 >/dev/null
-  [ "$(api7 "$H7/admin/api/hint")" = '{"hint":""}' ] && report "hint is empty at first, readable without login" 0 || report "hint is empty at first, readable without login" 1
-  [ "$(pi "curl -sI -m 5 $H7/admin/api/hint | tr -d '\r' | grep -ci '^cache-control: no-store'")" = 1 ] && report "hint answers Cache-Control: no-store" 0 || report "hint answers Cache-Control: no-store" 1
+  [ "$(st7 "$H7/admin/api/hint")" = 401 ] && report "hint without a session gets 401" 0 || report "hint without a session gets 401" 1
+  [ "$(hint7)" = '{"hint":""}' ] && report "hint is empty at first, readable with a session" 0 || report "hint is empty at first, readable with a session" 1
+  [ "$(pi "curl -sI -m 5 -b $T7/j1 $H7/admin/api/hint | tr -d '\r' | grep -ci '^cache-control: no-store'")" = 1 ] && report "hint answers Cache-Control: no-store" 0 || report "hint answers Cache-Control: no-store" 1
   [ "$(chg7 "{\"current\":\"nope-$RANDOM\",\"new\":\"$NEW7\"}")" = 401 ] && report "password change with a wrong current gets 401" 0 || report "password change with a wrong current gets 401" 1
   [ "$(chg7 "{\"current\":\"$PW7\",\"new\":\"$NEW7\",\"hint\":\"x $NEW7 x\"}")" = 400 ] && report "hint containing the new password gets 400" 0 || report "hint containing the new password gets 400" 1
   c="$(chg7 "{\"current\":\"$PW7\",\"new\":\"$NEW7\",\"hint\":\"hint text\"}")"
@@ -29,10 +31,10 @@ else
   [ "$(st7 "-b $T7/j2 $H7/admin/api/system")" = 401 ] && report "another session is logged out by the change" 0 || report "another session is logged out by the change" 1
   sleep 61 # the rate limit (5 per minute) counted the attempts above
   [ "$(login7 "$PW7" j3)" = 401 ] && [ "$(login7 "$NEW7" j3)" = 204 ] && report "old password refused, new one logs in" 0 || report "old password refused, new one logs in" 1
-  [ "$(api7 "$H7/admin/api/hint")" = '{"hint":"hint text"}' ] && report "hint round trip" 0 || report "hint round trip" 1 "$(api7 "$H7/admin/api/hint")"
+  [ "$(hint7)" = '{"hint":"hint text"}' ] && report "hint round trip" 0 || report "hint round trip" 1 "$(hint7)"
   [ "$(pi "stat -c '%a' $T7/admin.hash $T7/password-hint.txt | tr '\n' ' '; ls -A $T7 | grep -c tmp")" = "600 600 0" ] && report "hash and hint are 0600, no temp files left" 0 || report "hash and hint are 0600, no temp files left" 1
   c="$(st7 "-b $T7/j1 -H 'Content-Type: application/json' -d '{\"current\":\"$NEW7\",\"new\":\"$NEW7-2\",\"hint\":\"\"}' $H7/admin/api/password")"
-  [ "$c" = 204 ] && [ "$(api7 "$H7/admin/api/hint")" = '{"hint":""}' ] && report "empty hint clears it" 0 || report "empty hint clears it" 1 "$c"
+  [ "$c" = 204 ] && [ "$(hint7)" = '{"hint":""}' ] && report "empty hint clears it" 0 || report "empty hint clears it" 1 "$c"
   [ "$(pi "journalctl -u pihub --no-pager | grep -cF -e '$NEW7' -e '$PW7'; grep -cF -e '$NEW7' -e '$PW7' $T7/log")" = "$(printf '0\n0')" ] && report "no password text in journal or throwaway log" 0 || report "no password text in journal or throwaway log" 1
 
   # system info against what the Pi itself says

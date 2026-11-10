@@ -13,9 +13,12 @@ func (f *fixture) change(body string, c *http.Cookie, hdr map[string]string) int
 	return f.do("POST", "/admin/api/password", body, hdr, c).Code
 }
 
-func (f *fixture) hintOf(t *testing.T) string {
+func (f *fixture) hintOf(t *testing.T, c *http.Cookie) string {
 	t.Helper()
-	rec := f.do("GET", "/admin/api/hint", "", nil, nil)
+	if c := f.do("GET", "/admin/api/hint", "", nil, nil).Code; c != 401 {
+		t.Fatalf("hint without a session: %d", c)
+	}
+	rec := f.do("GET", "/admin/api/hint", "", nil, c)
 	if rec.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("hint Cache-Control: %q", rec.Header().Get("Cache-Control"))
 	}
@@ -100,10 +103,10 @@ func equalInts(a, b []int) bool {
 func TestHint(t *testing.T) {
 	f := newFixture(t)
 	c := f.session(t)
-	if h := f.hintOf(t); h != "" {
+	if h := f.hintOf(t, c); h != "" {
 		t.Fatalf("hint before: %q", h)
 	}
-	if f.change(`{"current":"correct horse","new":"brand new pw","hint":"hint text"}`, c, nil) != 204 || f.hintOf(t) != "hint text" {
+	if f.change(`{"current":"correct horse","new":"brand new pw","hint":"hint text"}`, c, nil) != 204 || f.hintOf(t, c) != "hint text" {
 		t.Fatal("hint not stored")
 	}
 	st, _ := os.Stat(f.a.hintFile())
@@ -111,11 +114,11 @@ func TestHint(t *testing.T) {
 		t.Fatalf("hint mode %v", st.Mode())
 	}
 	// absent keeps it
-	if f.change(`{"current":"brand new pw","new":"another pw 1"}`, c, nil) != 204 || f.hintOf(t) != "hint text" {
+	if f.change(`{"current":"brand new pw","new":"another pw 1"}`, c, nil) != 204 || f.hintOf(t, c) != "hint text" {
 		t.Fatal("absent hint did not keep the stored one")
 	}
 	// empty clears it
-	if f.change(`{"current":"another pw 1","new":"another pw 2","hint":""}`, c, nil) != 204 || f.hintOf(t) != "" {
+	if f.change(`{"current":"another pw 1","new":"another pw 2","hint":""}`, c, nil) != 204 || f.hintOf(t, c) != "" {
 		t.Fatal("empty hint did not clear")
 	}
 	if _, err := os.Stat(f.a.hintFile()); !os.IsNotExist(err) {
@@ -148,7 +151,7 @@ func TestHintLeaksNoPassword(t *testing.T) {
 	f := newFixture(t)
 	c := f.session(t)
 	f.change(`{"current":"correct horse","new":"brand new pw","hint":"hint text"}`, c, nil)
-	b := f.do("GET", "/admin/api/hint", "", nil, nil).Body.String()
+	b := f.do("GET", "/admin/api/hint", "", nil, c).Body.String()
 	if b != "{\"hint\":\"hint text\"}\n" {
 		t.Fatalf("hint body %q", b)
 	}

@@ -11,7 +11,7 @@ This writes `/var/lib/pihub/admin.hash` (`iterations$salt$hash`, PBKDF2-SHA256, 
 ## Account
 
 - `POST /admin/api/password` with `{"current","new","hint"?}`: needs a session and counts against the login rate limit (5 attempts a minute per client). Wrong `current` is 401 and changes nothing; `new` must be 8 or more characters and differ from `current` (400). On success every other session is logged out, the caller's stays, and the answer is 204.
-- Password hint: `<state-dir>/password-hint.txt`, at most 120 characters, no control characters. `GET /admin/api/hint` needs no login (the login screen shows it) and answers `{"hint":""}` when there is none. It is changed only through the password endpoint: `hint` absent keeps it, `""` clears it. A hint containing the current or new password (any case) is refused.
+- Password hint: `<state-dir>/password-hint.txt`, at most 120 characters, no control characters. `GET /admin/api/hint` needs a session (the login screen never shows it; only the password card does) and answers `{"hint":""}` when there is none, with `Cache-Control: no-store`. It is changed only through the password endpoint: `hint` absent keeps it, `""` clears it. A hint containing the current or new password (any case) is refused.
 - `GET /admin/api/system`: hostname, IPv4 addresses per interface, OS, kernel, architecture, hub revision (first 8 of the git commit, plus `modified`), boot time, time and zone, and `camera` (`state`, `last_result`, `updated` from `<--camera-dir>/status.json`, null when missing, plus `free` and `total` bytes).
 - `GET /admin/api/stats` also has `cpu_percent`: busy share since the previous call (the first call averages since boot).
 
