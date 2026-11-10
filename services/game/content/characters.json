@@ -1,0 +1,662 @@
+[
+ {
+  "id": "violet",
+  "name": "Violet Sorrengail",
+  "kind": "rider",
+  "partner": "tairn",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 3,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "tairn",
+  "name": "Tairn",
+  "kind": "dragon",
+  "partner": "violet",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 3,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "andarna",
+  "name": "Andarna",
+  "kind": "dragon",
+  "partner": "violet",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 3,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "xaden",
+  "name": "Xaden Riorson",
+  "kind": "rider",
+  "partner": "sgaeyl",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 3,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "sgaeyl",
+  "name": "Sgaeyl",
+  "kind": "dragon",
+  "partner": "xaden",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 3,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "dain",
+  "name": "Dain Aetos",
+  "kind": "rider",
+  "partner": "cath",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "cath",
+  "name": "Cath",
+  "kind": "dragon",
+  "partner": "dain",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "rhiannon",
+  "name": "Rhiannon Matthias",
+  "kind": "rider",
+  "partner": "feirge",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 3,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "feirge",
+  "name": "Feirge",
+  "kind": "dragon",
+  "partner": "rhiannon",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "ridoc",
+  "name": "Ridoc Gamlyn",
+  "kind": "rider",
+  "partner": "aotrom",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "aotrom",
+  "name": "Aotrom",
+  "kind": "dragon",
+  "partner": "ridoc",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "sawyer",
+  "name": "Sawyer Henrick",
+  "kind": "rider",
+  "partner": "sliseag",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "sliseag",
+  "name": "Sliseag",
+  "kind": "dragon",
+  "partner": "sawyer",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "liam",
+  "name": "Liam Mairi",
+  "kind": "rider",
+  "partner": "deigh",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "deigh",
+  "name": "Deigh",
+  "kind": "dragon",
+  "partner": "liam",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "imogen",
+  "name": "Imogen Cardulo",
+  "kind": "rider",
+  "partner": "glane",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "glane",
+  "name": "Glane",
+  "kind": "dragon",
+  "partner": "imogen",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "bodhi",
+  "name": "Bodhi Durran",
+  "kind": "rider",
+  "partner": "cuir",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "cuir",
+  "name": "Cuir",
+  "kind": "dragon",
+  "partner": "bodhi",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "garrick",
+  "name": "Garrick Tavis",
+  "kind": "rider",
+  "partner": "chradh",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "chradh",
+  "name": "Chradh",
+  "kind": "dragon",
+  "partner": "garrick",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "mira",
+  "name": "Mira Sorrengail",
+  "kind": "rider",
+  "partner": "teine",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "teine",
+  "name": "Teine",
+  "kind": "dragon",
+  "partner": "mira",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "brennan",
+  "name": "Brennan Sorrengail",
+  "kind": "rider",
+  "partner": "marbh",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "marbh",
+  "name": "Marbh",
+  "kind": "dragon",
+  "partner": "brennan",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "lilith",
+  "name": "Lilith Sorrengail",
+  "kind": "rider",
+  "partner": "aimsir",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 3,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "aimsir",
+  "name": "Aimsir",
+  "kind": "dragon",
+  "partner": "lilith",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "jack",
+  "name": "Jack Barlowe",
+  "kind": "rider",
+  "partner": "baide",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "baide",
+  "name": "Baide",
+  "kind": "dragon",
+  "partner": "jack",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "melgren",
+  "name": "General Melgren",
+  "kind": "rider",
+  "partner": "codagh",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "codagh",
+  "name": "Codagh",
+  "kind": "dragon",
+  "partner": "melgren",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "aaric",
+  "name": "Aaric Graycastle",
+  "kind": "rider",
+  "partner": "molvic",
+  "books": [
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "notes": "spelling conflict: Graycastle/Greycastle; Tauri in dragon table"
+ },
+ {
+  "id": "molvic",
+  "name": "Molvic",
+  "kind": "dragon",
+  "partner": "aaric",
+  "books": [
+   3
+  ],
+  "importance": 1,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "felix",
+  "name": "Felix Gerault",
+  "kind": "rider",
+  "partner": "nuirlach",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "nuirlach",
+  "name": "Nuirlach",
+  "kind": "dragon",
+  "partner": "felix",
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "sloane",
+  "name": "Sloane Mairi",
+  "kind": "rider",
+  "partner": "thoirt",
+  "books": [
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "thoirt",
+  "name": "Thoirt",
+  "kind": "dragon",
+  "partner": "sloane",
+  "books": [
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "quinn",
+  "name": "Quinn Hollis",
+  "kind": "rider",
+  "partner": "cruth",
+  "books": [
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "cruth",
+  "name": "Cruth",
+  "kind": "dragon",
+  "partner": "quinn",
+  "books": [
+   2,
+   3
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "aura",
+  "name": "Aura Beinhaven",
+  "kind": "rider",
+  "partner": "dagolh",
+  "books": [
+   1,
+   2
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "dagolh",
+  "name": "Dagolh",
+  "kind": "dragon",
+  "partner": "aura",
+  "books": [
+   1,
+   2
+  ],
+  "importance": 1,
+  "confidence": "verified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+ },
+ {
+  "id": "theophanie",
+  "name": "Theophanie",
+  "kind": "other",
+  "partner": null,
+  "books": [
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "halden",
+  "name": "Halden Tauri",
+  "kind": "other",
+  "partner": null,
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "catriona",
+  "name": "Catriona Cordella",
+  "kind": "other",
+  "partner": null,
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "tecarus",
+  "name": "Viscount Tecarus",
+  "kind": "other",
+  "partner": null,
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "aetos",
+  "name": "Colonel Aetos",
+  "kind": "other",
+  "partner": null,
+  "books": [
+   1,
+   2
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "panchek",
+  "name": "Colonel Lyron Panchek",
+  "kind": "other",
+  "partner": null,
+  "books": [
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ },
+ {
+  "id": "jesinia",
+  "name": "Jesinia Neilwart",
+  "kind": "other",
+  "partner": null,
+  "books": [
+   1,
+   2,
+   3
+  ],
+  "importance": 2,
+  "confidence": "unverified",
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+ }
+]

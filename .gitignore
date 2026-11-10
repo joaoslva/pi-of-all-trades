@@ -12,8 +12,9 @@ __pycache__/
 # Local orchestration notes
 .claude/
 hub/rootfs/usr/local/bin/pihub
-app/rootfs/usr/local/bin/camera-drive
+services/camera-drive/rootfs/usr/local/bin/camera-drive
 
 # go build output
 /hub/pihub
-/app/camera-drive
+/services/camera-drive/camera-drive
+/services/game/rootfs/usr/local/bin/guessing-day
