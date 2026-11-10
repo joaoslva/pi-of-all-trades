@@ -11,6 +11,9 @@
   dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
   dt { opacity: .7; } dd { margin: 0; text-align: right; }
   .err { color: #c00; }
+  .warn { border: 1px solid #c60; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+  .svc { border: 1px solid; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+  .svc small { opacity: .7; display: block; }
 </style>
 </head>
 <body>
@@ -21,7 +24,10 @@
   <p class="err" id="err"></p>
 </form>
 <div id="main" hidden>
+  <div id="warnings"></div>
   <dl id="stats"></dl>
+  <h2>Services</h2>
+  <div id="services"></div>
   <button data-power="reboot">Reboot</button>
   <button data-power="poweroff">Power off</button>
   <p id="msg"></p>
@@ -30,10 +36,45 @@
 <script>
 const $ = id => document.getElementById(id);
 const post = (url, body) => fetch(url, {method: 'POST', body});
+let services = [];
+const text = (tag, t, cls) => { const e = document.createElement(tag); e.textContent = t; if (cls) e.className = cls; return e; };
+async function loadServices() {
+  const r = await fetch('/admin/api/services');
+  if (!r.ok) return;
+  const d = await r.json();
+  services = d.services;
+  $('warnings').replaceChildren(...d.warnings.map(w => text('div', w.message, 'warn')));
+  $('services').replaceChildren(...services.map(s => {
+    const box = text('div', '', 'svc');
+    const mem = s.memory_bytes == null ? 'n/a' : Math.round(s.memory_bytes / 1048576) + ' MB';
+    box.append(text('strong', s.name + (s.running ? ' (running)' : ' (stopped)')),
+      text('small', s.class + ' · memory ' + mem + ' · ' + s.units.map(u => u.unit + ': ' + u.state).join(', ')));
+    if (s.class === 'exclusive') {
+      const b = text('button', s.running ? 'Switch off ' + s.name : 'Switch to ' + s.name);
+      b.onclick = () => (s.running ? ask('stop', s) : ask('switch', s));
+      box.append(b);
+    }
+    return box;
+  }));
+}
+// The dialog names what stops and what starts; the server only runs it with the nonce from step one.
+async function ask(verb, s) {
+  const stops = services.filter(o => o.class === 'exclusive' && o.running && (verb === 'stop' || o.id !== s.id));
+  const names = stops.map(o => o.name).join(', ');
+  const q = verb === 'stop' ? 'Stop ' + s.name + '?' :
+    (names ? 'Stop ' + names + ' and start ' + s.name + '?' : 'Start ' + s.name + '?');
+  if (!confirm(q)) return;
+  const url = '/admin/api/' + verb, id = s.id;
+  const {nonce} = await (await post(url, JSON.stringify({id}))).json();
+  const r = await post(url, JSON.stringify({id, nonce}));
+  $('msg').textContent = r.ok ? 'Done.' : 'Failed: ' + await r.text();
+  loadServices();
+}
 async function refresh() {
   const r = await fetch('/admin/api/stats');
   $('login').hidden = r.ok; $('main').hidden = !r.ok;
   if (!r.ok) return;
+  loadServices();
   const s = await r.json();
   const gb = b => (b / 1e9).toFixed(1) + ' GB', mb = k => Math.round(k / 1024) + ' MB';
   const up = Math.floor(s.uptime_s / 60);

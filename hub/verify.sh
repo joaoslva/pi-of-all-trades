@@ -83,11 +83,21 @@ fi
 
 # --- H2: admin login, stats, power. The throwaway password's hash is removed on exit.
 HASH=/etc/pihub/admin.hash
-JAR="$(mktemp)"; trap 'rm -f "$JAR"; pi "sudo -n rm -f $HASH" 2>/dev/null' EXIT
+JAR="$(mktemp)"; ours_hash=1; T=""; live_before=""; h3_live_starts=0
+cleanup() {
+  rm -f "$JAR"
+  [ "$ours_hash" = 1 ] && pi "sudo -n rm -f $HASH" 2>/dev/null # only a hash this run created
+  [ -n "$T" ] || return 0
+  pi "sudo -n systemctl stop pihub-verify-stray 2>/dev/null; sudo -n systemctl reset-failed pihub-verify-stray 2>/dev/null
+      kill \$(cat $T/pid) 2>/dev/null; rm -rf $T
+      systemctl -q is-active camera-drive-web || sudo -n systemctl start camera-drive-web
+      [ \"$live_before\" = active ] || sudo -n systemctl stop camera-live" 2>/dev/null
+}
+trap cleanup EXIT
 PW="verify-$RANDOM$RANDOM$RANDOM"
 admin_ok=0
 if pi "test -e $HASH"; then
-  trap 'rm -f "$JAR"' EXIT # not ours: leave the operator's password alone
+  ours_hash=0 # not ours: leave the operator's password alone
   report "admin checks" skip "$HASH already exists, not overwriting it"
 else
   [ "$(code "http://$HOST/admin")" = 503 ] && report "/admin without a password answers 503" 0 || report "/admin without a password answers 503" 1
@@ -132,6 +142,87 @@ if [ "$admin_ok" = 1 ]; then
   [ -n "$rss" ] && [ "$rss" -lt 23000 ] && report "pihub under 23000 kB" 0 "$rss kB" || report "pihub under 23000 kB" 1 "${rss:-?} kB"
 fi
 
+# --- H3: switching. The operator's password is unknown, so an extra hub runs on a high
+# port with a throwaway hash and state dir. It uses the real systemd, so the switches are real.
+H3=http://127.0.0.1:18081
+PW3="verify3-$RANDOM$RANDOM$RANDOM"
+T="$(pi mktemp -d)"
+live_before="$(pi 'systemctl is-active camera-live')"
+starts_before="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
+cam_before="$(pi 'systemctl is-active camera-drive-web')"
+echo "INFO  before: camera-drive-web=$cam_before camera-live=$live_before"
+api() { pi "curl -s -m 60 -b $T/jar -c $T/jar $1"; }
+start_inst() {
+  pi "setsid nohup /usr/local/bin/pihub --listen 127.0.0.1:18081 --hash-file $T/admin.hash --state-dir $T --services-dir $T/svc >$T/log 2>&1 </dev/null & echo \$! >$T/pid"
+  wait_for 10 pi "curl -s -o /dev/null -m 2 $H3/"
+  [ "$(pi "curl -s -o /dev/null -m 5 -c $T/jar --data-urlencode password=$PW3 -w '%{http_code}' $H3/admin/api/login")" = 204 ]
+}
+stop_inst() { pi "kill \$(cat $T/pid); sleep 0.5"; }
+svc_json() { api "$H3/admin/api/services"; }
+nonce_for() { api "-d '{\"id\":\"camera\"}' $H3/admin/api/$1" | sed -n 's/.*"nonce":"\([0-9a-f]*\)".*/\1/p'; }
+py() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); $2" "$1"; }
+
+ssh "${SSH_OPTS[@]}" "$PI" "mkdir $T/svc && cp /etc/pihub/services.d/*.json $T/svc/ && cat >$T/svc/stray.json" <<'JSON'
+{"id":"stray","name":"Stray","description":"verify fixture","class":"exclusive","units":["pihub-verify-stray.service"],"port":18090}
+JSON
+echo "$PW3" | ssh "${SSH_OPTS[@]}" "$PI" "sudo -n /usr/local/bin/pihub passwd --file $T/admin.hash" 2>&1 | grep -v '^$'
+if [ "$cam_before" != active ]; then
+  report "H3 checks" skip "camera-drive-web was not active before the run; not switching anything"
+elif ! start_inst; then
+  report "high-port hub starts and logs in" 1 "$(pi "tail -3 $T/log")"
+else
+  j="$(svc_json)"
+  if py "$j" "c=[s for s in d['services'] if s['id']=='camera'][0]; print('INFO  camera:', c); sys.exit(0 if c['class']=='exclusive' and c['running'] and len(c['units'])==2 and (c['memory_bytes'] is None or c['memory_bytes']>0) and 'warnings' in d else 1)"; then
+    report "services list shows camera exclusive, running, units, memory or n/a" 0
+  else report "services list shows camera exclusive, running, units, memory or n/a" 1 "$j"; fi
+  py "$j" "sys.exit(0 if [s for s in d['services'] if s['id']=='offload'][0]['class']=='background' else 1)" &&
+    report "offload listed as background" 0 || report "offload listed as background" 1
+
+  n="$(nonce_for stop)"
+  bad="$(api "-o /dev/null -w '%{http_code}' -d '{\"id\":\"camera\",\"nonce\":\"$n\"}' $H3/admin/api/switch")"
+  [ "$bad" = 400 ] && report "stop nonce cannot confirm a switch" 0 || report "stop nonce cannot confirm a switch" 1 "got $bad"
+  n="$(nonce_for stop)"
+  code="$(api "-o /dev/null -w '%{http_code}' -d '{\"id\":\"camera\",\"nonce\":\"$n\"}' $H3/admin/api/stop")"
+  both_off="$(pi 'systemctl is-active camera-drive-web camera-live | sort -u | tr "\n" " "')"
+  [ "$code" = 204 ] && [ "$both_off" = "inactive " ] && report "Camera off stops camera-drive-web and camera-live together" 0 || report "Camera off stops camera-drive-web and camera-live together" 1 "http $code, units: $both_off"
+  [ "$(pi "cat $T/state.json")" = '{"active":""}' ] && report "state says off after Camera off" 0 || report "state says off after Camera off" 1 "$(pi "cat $T/state.json")"
+
+  n="$(nonce_for switch)"; h3_live_starts=1
+  secs="$(pi "s=\$(date +%s.%N); c=\$(curl -s -o /dev/null -m 60 -b $T/jar -w '%{http_code}' -d '{\"id\":\"camera\",\"nonce\":\"$n\"}' $H3/admin/api/switch)
+    until [ \"\$(curl -s -o /dev/null -m 2 -w '%{http_code}' http://127.0.0.1:8081/)\" = 200 ]; do sleep 0.2; [ \$(( \$(date +%s) - \${s%.*} )) -gt 60 ] && { echo timeout; exit 1; }; done
+    echo \$c \$(awk -v e=\$(date +%s.%N) -v s=\$s 'BEGIN{printf \"%.2f\", e-s}')")"
+  echo "INFO  confirm to camera page answering again: $secs (http code, seconds)"
+  on="$(pi 'systemctl is-active camera-drive-web camera-live | sort -u | tr "\n" " "')"
+  case "$secs" in 204*) [ "$on" = "active " ] && report "Camera on starts both units and :8081 answers" 0 "$secs" || report "Camera on starts both units and :8081 answers" 1 "units: $on" ;;
+    *) report "Camera on starts both units and :8081 answers" 1 "$secs" ;; esac
+
+  stop_inst; start_inst
+  j="$(svc_json)"
+  py "$j" "sys.exit(0 if [s for s in d['services'] if s['id']=='camera'][0]['selected'] else 1)" && [ "$(pi "cat $T/state.json")" = '{"active":"camera"}' ] &&
+    report "state survives a hub restart" 0 || report "state survives a hub restart" 1 "$(pi "cat $T/state.json")"
+
+  pi 'sudo -n systemd-run --quiet --unit=pihub-verify-stray sleep 600'
+  sleep 1
+  j="$(svc_json)"
+  py "$j" "print('INFO  warnings:', d['warnings']); sys.exit(0 if any(w['kind']=='many-exclusive' for w in d['warnings']) else 1)" &&
+    report "a stray second Exclusive unit raises a warning" 0 || report "a stray second Exclusive unit raises a warning" 1 "$j"
+  pi 'sudo -n systemctl stop pihub-verify-stray'
+  j="$(svc_json)"
+  py "$j" "sys.exit(0 if not any(w['kind']=='many-exclusive' for w in d['warnings']) else 1)" &&
+    report "warning clears when the stray unit stops" 0 || report "warning clears when the stray unit stops" 1
+
+  deps="$(pi 'systemctl show camera-offload@sda1.service -p PartOf,Requires,BindsTo,Wants,After')"
+  grep -qE 'camera-(drive-web|live)' <<<"$deps" && report "camera-offload@ has no dependency on the camera app" 1 "$deps" || report "camera-offload@ has no dependency on the camera app" 0
+
+  [ "$(pi 'cat /var/lib/pihub/state.json')" = '{"active":"camera"}' ] && report "production hub state.json says camera" 0 || report "production hub state.json says camera" 1 "$(pi 'cat /var/lib/pihub/state.json 2>&1')"
+  rss="$(pi 'awk "/VmRSS/{print \$2}" /proc/$(systemctl show -p MainPID --value pihub)/status')"
+  echo "INFO  pihub VmRSS after H3 checks: ${rss:-?} kB"
+  [ -n "$rss" ] && [ "$rss" -lt 23000 ] && report "pihub under 23000 kB after H3" 0 "$rss kB" || report "pihub under 23000 kB after H3" 1 "${rss:-?} kB"
+fi
+# Leave the Pi as found: camera-live was only started by the switch, not by a camera in live mode.
+[ "$live_before" = active ] || pi 'sudo -n systemctl stop camera-live'
+echo "INFO  after: camera-drive-web=$(pi 'systemctl is-active camera-drive-web') camera-live=$(pi 'systemctl is-active camera-live')"
+
 if [ "${PIHUB_TEST_POWER:-}" = 1 ] && [ -z "${NO_REBOOT:-}" ]; then
 # Never reboot in the middle of an offload.
 idle() { [ -z "$(pi 'systemctl list-units "camera-offload@*" --state=activating,active --no-legend')" ]; }
@@ -169,10 +260,14 @@ if grep -q '08ca:2023' <<<"$usb"; then
   [ "$n" = 1 ] && report "camera plugged in (storage) starts camera-offload@ once" 0 || report "camera plugged in (storage) starts camera-offload@ once" 1 "started $n times"
 elif grep -q '08ca:2022' <<<"$usb"; then
   n="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
-  if [ "$n" = 1 ] && pi 'systemctl -q is-active camera-live'; then
-    report "camera plugged in (live) has camera-live active, started once" 0
+  # Earlier runs this boot (and plug-ins) also start camera-live, so count only what changed during H3:
+  # its Camera-on switch must have added exactly one start, and camera-live must be active.
+  plugs="$(pi 'journalctl -b -k --no-pager | grep -c "idVendor=08ca, idProduct=2022"')"
+  echo "INFO  camera-live starts this boot: $n (before H3: $starts_before, plug-ins: $plugs)"
+  if [ "$n" = "$((starts_before + h3_live_starts))" ] && pi 'systemctl -q is-active camera-live'; then
+    report "camera in live mode: camera-live active, H3 added exactly its own start" 0
   else
-    report "camera plugged in (live) has camera-live active, started once" 1 "started $n times"
+    report "camera in live mode: camera-live active, H3 added exactly its own start" 1 "$n starts, $starts_before before H3, $h3_live_starts expected from H3"
   fi
 else
   [ "$had_camera" = 1 ] && report "camera came back after reboot" 1 "08ca:202x gone" ||

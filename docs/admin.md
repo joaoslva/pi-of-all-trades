@@ -11,3 +11,7 @@ This writes `/etc/pihub/admin.hash` (`iterations$salt$hash`, PBKDF2-SHA256, mode
 Measured on the Pi Zero 2 W: Go's `crypto/pbkdf2` takes about 8 microseconds per iteration (100000 iterations = 0.8 s), so 25000 iterations is about 200 ms. The count is stored in each hash; raise `pbkdf2Iterations` in `hub/auth.go` and run `pihub passwd` again to change it.
 
 Sessions live in memory: a hub restart logs everyone out. They expire after 30 idle minutes. Power actions need a confirm step (a one-time nonce valid for 60 s).
+
+## Services
+
+The Services section lists every service with its class, units and memory (`n/a` when the kernel has cgroup memory accounting off, as on this Pi). Exclusive services have a switch button: the dialog names what will stop and what will start, and a one-time nonce (bound to that exact action) confirms it. Background services are read-only. A banner shows overload warnings; it never blocks anything. See `docs/adding-a-service.md`.

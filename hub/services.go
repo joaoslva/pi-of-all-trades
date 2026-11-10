@@ -23,8 +23,11 @@ type Service struct {
 	Description string   `json:"description"`
 	Class       Class    `json:"class"`
 	Units       []string `json:"units"`
-	Port        int      `json:"port"`
+	Port        int      `json:"port"` // 0 means no web page, so no landing button (Background only)
 }
+
+// Listed reports whether the landing page gets a button for s.
+func (s Service) Listed() bool { return s.Class == Exclusive && s.Port != 0 }
 
 // LoadServices reads every *.json file in dir. It is the only parser.
 func LoadServices(dir string) ([]Service, error) {
@@ -53,7 +56,7 @@ func LoadServices(dir string) ([]Service, error) {
 		if p, ok := ids[s.ID]; ok {
 			return nil, fmt.Errorf("%s: duplicate id %q (also in %s)", f, s.ID, p)
 		}
-		if p, ok := ports[s.Port]; ok {
+		if p, ok := ports[s.Port]; ok && s.Port != 0 {
 			return nil, fmt.Errorf("%s: port %d already used by %s", f, s.Port, p)
 		}
 		ids[s.ID], ports[s.Port] = f, f
@@ -70,7 +73,7 @@ func (s Service) validate() error {
 		return fmt.Errorf("missing name")
 	case len(s.Units) == 0:
 		return fmt.Errorf("missing units")
-	case s.Port < 1 || s.Port > 65535:
+	case s.Port < 0 || s.Port > 65535 || (s.Port == 0 && s.Class == Exclusive):
 		return fmt.Errorf("port %d out of range", s.Port)
 	case s.Class != Exclusive && s.Class != Background:
 		return fmt.Errorf("unknown class %q", s.Class)
@@ -78,6 +81,9 @@ func (s Service) validate() error {
 	for _, u := range s.Units {
 		if u == "" {
 			return fmt.Errorf("empty unit name")
+		}
+		if s.Class == Exclusive && isTemplate(u) {
+			return fmt.Errorf("exclusive service cannot use template unit %q", u)
 		}
 	}
 	return nil

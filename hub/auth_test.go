@@ -30,7 +30,7 @@ func newFixture(t *testing.T) *fixture {
 	f.a = NewAuth(file)
 	f.a.now = func() time.Time { return f.clock }
 	f.a.run = func(args ...string) error { f.ran = append(f.ran, strings.Join(args, " ")); return nil }
-	f.h = newHandler(nil, f.a)
+	f.h = newHandler(nil, f.a, nil)
 	return f
 }
 

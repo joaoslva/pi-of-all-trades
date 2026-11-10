@@ -32,20 +32,27 @@ type linkView struct {
 
 // newHandler serves the landing page. Buttons are plain redirects to each
 // service's own port on whatever host the browser used to reach us.
-func newHandler(services []Service, auth *Auth) http.Handler {
+func newHandler(services []Service, auth *Auth, ctl *Control) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin", auth.adminPage)
 	mux.HandleFunc("POST /admin/api/login", auth.login)
 	mux.HandleFunc("GET /admin/api/stats", auth.require(auth.stats))
 	mux.HandleFunc("POST /admin/api/power", auth.require(auth.power))
+	if ctl != nil {
+		mux.HandleFunc("GET /admin/api/services", auth.require(ctl.list))
+		mux.HandleFunc("POST /admin/api/switch", auth.require(ctl.twoStep(auth, "switch", ctl.Switch)))
+		mux.HandleFunc("POST /admin/api/stop", auth.require(ctl.twoStep(auth, "stop", ctl.Stop)))
+	}
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			host = strings.Trim(r.Host, "[]") // no port in the Host header
 		}
-		views := make([]linkView, len(services))
-		for i, s := range services {
-			views[i] = linkView{s, template.URL("http://" + net.JoinHostPort(host, strconv.Itoa(s.Port)) + "/")}
+		var views []linkView
+		for _, s := range services {
+			if s.Listed() {
+				views = append(views, linkView{s, template.URL("http://" + net.JoinHostPort(host, strconv.Itoa(s.Port)) + "/")})
+			}
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := indexTmpl.Execute(w, views); err != nil {
@@ -86,12 +93,17 @@ func main() {
 	}
 	listen := flag.String("listen", ":80", "address to listen on")
 	dir := flag.String("services-dir", "/etc/pihub/services.d", "directory of service JSON files")
+	stateDir := flag.String("state-dir", "/var/lib/pihub", "directory for state.json")
 	hash := flag.String("hash-file", defaultHashFile, "admin password hash file")
 	flag.Parse()
 	services, err := LoadServices(*dir)
 	if err != nil {
 		log.Fatal(err)
 	}
+	ctl := NewControl(systemctl{}, services, *stateDir)
+	if err := ctl.Reconcile(); err != nil {
+		log.Printf("reconcile: %v", err) // the hub still serves; the admin page shows what is running
+	}
 	log.Printf("pihub: %d service(s), listening on %s", len(services), *listen)
-	log.Fatal(http.ListenAndServe(*listen, newHandler(services, NewAuth(*hash))))
+	log.Fatal(http.ListenAndServe(*listen, newHandler(services, NewAuth(*hash), ctl)))
 }
