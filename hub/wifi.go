@@ -20,12 +20,40 @@ const (
 	hotspotCon    = "camera-drive-ap"
 	fallbackTimer = "camera-net-fallback.timer" // read-only: the hub only ever Shows it
 	switchFlag    = "/run/pihub/wifi-switching"
-	revertUnit    = "pihub-wifi-revert"
-	wifiIface     = "wlan0"
+	// The operator chose the hotspot: camera-net-fallback does not rejoin a client network while it exists.
+	// Runtime only, so a reboot goes back to normal behaviour.
+	holdFlag   = "/run/pihub/hotspot-hold"
+	hotspotURL = "http://10.42.0.1/admin"
+	revertUnit = "pihub-wifi-revert"
+	wifiIface  = "wlan0"
 	// The fallback script ignores the flag after this long (see camera-net-fallback),
 	// so the revert has to fire before it.
 	flagStale = 90 * time.Second
 )
+
+// WifiMode is derived from what NetworkManager says plus the hold flag.
+type WifiMode string
+
+const (
+	ModeClient          WifiMode = "client"
+	ModeHotspotDemand   WifiMode = "hotspot-on-demand" // hotspot, hold present: the operator asked for it
+	ModeHotspotFallback WifiMode = "hotspot-fallback"  // hotspot, no hold: the fallback raised it
+	ModeNone            WifiMode = "none"
+)
+
+func (m WifiMode) hosting() bool { return m == ModeHotspotDemand || m == ModeHotspotFallback }
+
+func deriveMode(active string, hotspot, hold bool) WifiMode {
+	switch {
+	case active == "":
+		return ModeNone
+	case !hotspot:
+		return ModeClient
+	case hold:
+		return ModeHotspotDemand
+	}
+	return ModeHotspotFallback
+}
 
 // NMCLI runs nmcli; tests fake it. Output is stdout only, errors carry stderr.
 type NMCLI interface {
@@ -189,8 +217,12 @@ func validatePassword(p string) error {
 // revertArgs is the systemd-run command line that brings prev back and then removes the
 // flag, whatever happens to the nmcli call (no flag left means the fallback may act again).
 func revertArgs(seconds int, prev string) []string {
+	script := `nmcli -w 30 connection up id "$1"; rm -f ` + switchFlag
+	if prev == hotspotCon { // going back to a hotspot the operator had asked for
+		script += "; touch " + holdFlag
+	}
 	return []string{"--quiet", "--collect", "--unit=" + revertUnit, "--on-active=" + strconv.Itoa(seconds),
-		"sh", "-c", `nmcli -w 30 connection up id "$1"; rm -f ` + switchFlag, "sh", prev}
+		"sh", "-c", script, "sh", prev}
 }
 
 // Wifi manages saved Wi-Fi profiles. It never touches the fallback: the only thing it
@@ -201,15 +233,17 @@ type Wifi struct {
 	armRevert func(seconds int, prev string) error
 	now       func() time.Time
 	flagPath  string
+	holdPath  string
+	statePath string // network.json: last_client
 	revertSec int
 	hostname  string
 
 	mu sync.Mutex
 }
 
-func NewWifi(sd Systemd, revertSec int) *Wifi {
+func NewWifi(sd Systemd, revertSec int, stateDir string) *Wifi {
 	host, _ := os.Hostname()
-	return &Wifi{nm: nmcli{}, sd: sd, now: time.Now, flagPath: switchFlag, revertSec: revertSec, hostname: host + ".local",
+	return &Wifi{nm: nmcli{}, sd: sd, now: time.Now, flagPath: switchFlag, holdPath: holdFlag, statePath: filepath.Join(stateDir, "network.json"), revertSec: revertSec, hostname: host + ".local",
 		armRevert: func(seconds int, prev string) error {
 			out, err := exec.Command("systemd-run", revertArgs(seconds, prev)...).CombinedOutput()
 			if err != nil {
@@ -227,7 +261,8 @@ type SavedNet struct {
 }
 
 type WifiStatus struct {
-	Mode        string     `json:"mode"` // "client", "hotspot" or "none"
+	Mode        WifiMode   `json:"mode"`
+	LastClient  string     `json:"last_client"` // last client profile that was kept or seen active
 	SSID        string     `json:"ssid"`
 	Active      string     `json:"active"`
 	IP          string     `json:"ip"`
@@ -254,7 +289,8 @@ func (w *Wifi) statusLocked() (st WifiStatus, err error) {
 		return st, err
 	}
 	st.Active = parseActive(act, wifiIface)
-	st.Mode, st.Hostname, st.RevertSec, st.Saved = "none", w.hostname, w.revertSec, []SavedNet{}
+	st.Hostname, st.RevertSec, st.Saved = w.hostname, w.revertSec, []SavedNet{}
+	hotspotActive := false
 	for _, name := range parseWifiConnections(out) {
 		props, err := w.nm.Run("-t", "-f", "802-11-wireless.ssid,802-11-wireless.mode", "connection", "show", "id", name)
 		if err != nil {
@@ -263,14 +299,13 @@ func (w *Wifi) statusLocked() (st WifiStatus, err error) {
 		ssid, mode := parseWifiProps(props)
 		s := SavedNet{Name: name, SSID: ssid, Active: name == st.Active, Hotspot: mode == "ap" || name == hotspotCon}
 		if s.Active {
-			st.SSID, st.Mode = ssid, "client"
-			if s.Hotspot {
-				st.Mode = "hotspot"
-			}
+			st.SSID, hotspotActive = ssid, s.Hotspot
 		}
 		st.Saved = append(st.Saved, s)
 	}
-	if st.Mode == "client" {
+	_, holdErr := os.Stat(w.holdPath)
+	st.Mode = deriveMode(st.Active, hotspotActive, holdErr == nil)
+	if st.Mode == ModeClient {
 		ip, _ := w.nm.Run("-t", "-g", "IP4.ADDRESS", "device", "show", wifiIface)
 		st.IP = parseIP(ip)
 	}
@@ -280,7 +315,32 @@ func (w *Wifi) statusLocked() (st WifiStatus, err error) {
 	if info, err := w.sd.Show(revertUnit + ".timer"); err == nil {
 		st.RevertArmed = info.up()
 	}
+	w.trackLast(&st)
 	return st, nil
+}
+
+// trackLast keeps last_client: the client profile in use counts as known-good unless a switch
+// is still waiting for Keep. A profile that was forgotten is not offered.
+func (w *Wifi) trackLast(st *WifiStatus) {
+	var rec struct {
+		LastClient string `json:"last_client"`
+	}
+	if b, err := os.ReadFile(w.statePath); err == nil {
+		json.Unmarshal(b, &rec)
+	}
+	if st.Mode == ModeClient && !st.RevertArmed && rec.LastClient != st.Active {
+		rec.LastClient = st.Active
+		b, _ := json.Marshal(rec)
+		tmp := w.statePath + ".tmp"
+		if os.WriteFile(tmp, b, 0o644) == nil {
+			os.Rename(tmp, w.statePath)
+		}
+	}
+	for _, s := range st.Saved {
+		if s.Name == rec.LastClient && !s.Hotspot {
+			st.LastClient = s.Name
+		}
+	}
 }
 
 // Scan is refused in hotspot mode: on this single radio a scan drops the hotspot.
@@ -291,7 +351,7 @@ func (w *Wifi) Scan() ([]Network, error) {
 	if err != nil {
 		return nil, err
 	}
-	if st.Mode == "hotspot" {
+	if st.Mode.hosting() {
 		return nil, userErr("scanning is off in hotspot mode, enter the SSID by hand")
 	}
 	out, err := w.nm.Run("-t", "-f", "IN-USE,SIGNAL,SECURITY,SSID", "device", "wifi", "list", "ifname", wifiIface, "--rescan", "yes")
@@ -375,13 +435,27 @@ func (w *Wifi) checkConnect(name string) (st WifiStatus, err error) {
 	case err != nil:
 		return st, err
 	case s.Hotspot:
-		return st, userErr("the hotspot is raised by the fallback, not from here")
+		return st, userErr("use Turn on hotspot for the hotspot")
 	case s.Active:
 		return st, userErr("already connected to this network")
 	case st.RevertArmed:
 		return st, userErr("a switch is waiting to be kept; keep it or wait for the revert")
 	}
 	return st, nil
+}
+
+func (w *Wifi) lockFlag() error {
+	if err := os.MkdirAll(filepath.Dir(w.flagPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(w.flagPath, []byte(strconv.FormatInt(w.now().Unix(), 10)+"\n"), 0o644)
+}
+
+func (w *Wifi) setHold() error {
+	if err := os.MkdirAll(filepath.Dir(w.holdPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(w.holdPath, nil, 0o644)
 }
 
 // Connect switches networks with a safety net: flag first (the fallback stands down), then a
@@ -393,10 +467,11 @@ func (w *Wifi) Connect(name string) (res ConnectResult, err error) {
 	if err != nil {
 		return res, err
 	}
-	if err := os.MkdirAll(filepath.Dir(w.flagPath), 0o755); err != nil {
-		return res, err
-	}
-	if err := os.WriteFile(w.flagPath, []byte(strconv.FormatInt(w.now().Unix(), 10)+"\n"), 0o644); err != nil {
+	return w.connectLocked(st, name)
+}
+
+func (w *Wifi) connectLocked(st WifiStatus, name string) (res ConnectResult, err error) {
+	if err := w.lockFlag(); err != nil {
 		return res, err
 	}
 	armed := false
@@ -412,13 +487,118 @@ func (w *Wifi) Connect(name string) (res ConnectResult, err error) {
 		armed = true
 	}
 	res = ConnectResult{Hostname: w.hostname, RevertSec: w.revertSec, Deadline: w.now().Add(time.Duration(w.revertSec) * time.Second).Unix()}
-	// The revert stays armed on failure: it restores the previous network.
 	if _, err := w.nm.Run("-w", "20", "connection", "up", "id", name); err != nil {
-		return res, fmt.Errorf("%w (the previous network returns in about %d s)", err, w.revertSec)
+		return res, fmt.Errorf("%w; %s", err, w.recoverFrom(st, &armed))
 	}
 	ip, _ := w.nm.Run("-t", "-g", "IP4.ADDRESS", "device", "show", wifiIface)
 	res.IP = parseIP(ip)
 	return res, nil
+}
+
+// recoverFrom runs right after a failed connection attempt, without waiting for the revert timer:
+// previous connection first (the hold comes back with an on-demand hotspot), then the hotspot as
+// a last resort, without a hold so the fallback still rejoins client networks. If the previous
+// connection is back the timer is cancelled; otherwise it stays armed as the safety net.
+func (w *Wifi) recoverFrom(st WifiStatus, armed *bool) string {
+	if st.Active != "" {
+		if _, err := w.nm.Run("-w", "20", "connection", "up", "id", st.Active); err == nil {
+			if st.Mode == ModeHotspotDemand {
+				w.setHold()
+			}
+			if !*armed || w.sd.Stop(revertUnit+".timer") == nil {
+				*armed = false
+			}
+			return fmt.Sprintf("the Pi is back on %q", st.Active)
+		}
+	}
+	if st.Active != hotspotCon {
+		if _, err := w.nm.Run("-w", "20", "connection", "up", "id", hotspotCon); err == nil {
+			return fmt.Sprintf("the previous network did not come back, so the Pi raised its hotspot (%s); it retries the previous network in about %d s", hotspotURL, w.revertSec)
+		}
+	}
+	return fmt.Sprintf("the Pi has no network right now; the previous network is retried in about %d s", w.revertSec)
+}
+
+type HotspotResult struct {
+	SSID string `json:"ssid"`
+	URL  string `json:"url"`
+}
+
+func (w *Wifi) checkHotspotOn() (st WifiStatus, ap SavedNet, err error) {
+	if st, err = w.statusLocked(); err != nil {
+		return
+	}
+	if ap, err = w.saved(st, hotspotCon); err != nil {
+		return
+	}
+	switch {
+	case st.Mode == ModeHotspotDemand:
+		err = userErr("the hotspot is already on")
+	case st.RevertArmed:
+		err = userErr("a switch is waiting to be kept; keep it or wait for the revert")
+	}
+	return
+}
+
+// HotspotOn raises the hotspot and holds it (the fallback will not rejoin a client network).
+// No revert: one radio cannot serve both, so on failure it goes straight back to the previous network.
+func (w *Wifi) HotspotOn() (res HotspotResult, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	st, ap, err := w.checkHotspotOn()
+	if err != nil {
+		return res, err
+	}
+	if err := w.lockFlag(); err != nil {
+		return res, err
+	}
+	defer os.Remove(w.flagPath)
+	if err := w.setHold(); err != nil {
+		return res, err
+	}
+	if st.Mode != ModeHotspotFallback { // already hosting: only the hold was missing
+		if _, err := w.nm.Run("-w", "20", "connection", "up", "id", hotspotCon); err != nil {
+			os.Remove(w.holdPath)
+			back := "the Pi has no network right now"
+			if st.Active != "" {
+				if _, e := w.nm.Run("-w", "20", "connection", "up", "id", st.Active); e == nil {
+					back = fmt.Sprintf("the Pi is back on %q", st.Active)
+				}
+			}
+			return res, fmt.Errorf("%w; %s", err, back)
+		}
+	}
+	return HotspotResult{SSID: ap.SSID, URL: hotspotURL}, nil
+}
+
+func (w *Wifi) checkHotspotOff() (st WifiStatus, err error) {
+	if st, err = w.statusLocked(); err != nil {
+		return
+	}
+	switch {
+	case !st.Mode.hosting():
+		err = userErr("the Pi is not in hotspot mode")
+	case st.LastClient == "":
+		err = userErr("no working client network is known yet; add one and switch to it first")
+	case st.RevertArmed:
+		err = userErr("a switch is waiting to be kept; keep it or wait for the revert")
+	}
+	return
+}
+
+// HotspotOff drops the hold and switches to the last working client network like any other
+// switch; if that fails the previous connection (the hotspot, hold restored) comes back.
+func (w *Wifi) HotspotOff() (res ConnectResult, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	st, err := w.checkHotspotOff()
+	if err != nil {
+		return res, err
+	}
+	if err := removeIfExists(w.holdPath); err != nil {
+		return res, err
+	}
+	return w.connectLocked(st, st.LastClient)
 }
 
 // Keep cancels the revert and removes the flag; the flag goes even if the timer is already gone.
@@ -434,7 +614,11 @@ func (w *Wifi) Keep() error {
 	} else {
 		stopErr = err
 	}
-	return errors.Join(stopErr, removeIfExists(w.flagPath))
+	err = errors.Join(stopErr, removeIfExists(w.flagPath))
+	if err == nil {
+		w.statusLocked() // the kept network now counts as the last working one
+	}
+	return err
 }
 
 func removeIfExists(p string) error {
@@ -502,6 +686,12 @@ func (w *Wifi) op(a *Auth) http.HandlerFunc {
 			target = req.Name
 			check = func() error { w.mu.Lock(); defer w.mu.Unlock(); _, err := w.checkConnect(req.Name); return err }
 			run = func() (any, error) { return w.Connect(req.Name) }
+		case "hotspot-on":
+			check = func() error { w.mu.Lock(); defer w.mu.Unlock(); _, _, err := w.checkHotspotOn(); return err }
+			run = func() (any, error) { return w.HotspotOn() }
+		case "hotspot-off":
+			check = func() error { w.mu.Lock(); defer w.mu.Unlock(); _, err := w.checkHotspotOff(); return err }
+			run = func() (any, error) { return w.HotspotOff() }
 		case "keep":
 			check = func() error { return nil }
 			run = func() (any, error) { return nil, w.Keep() }

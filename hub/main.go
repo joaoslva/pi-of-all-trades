@@ -113,6 +113,8 @@ func main() {
 	if err := ctl.Reconcile(); err != nil {
 		log.Printf("reconcile: %v", err) // the hub still serves; the admin page shows what is running
 	}
+	wifi := NewWifi(systemctl{}, *revert, *stateDir)
+	wifi.Status() // records the network we are on as the last working one
 	log.Printf("pihub: %d service(s), listening on %s", len(services), *listen)
-	log.Fatal(http.ListenAndServe(*listen, newHandler(services, NewAuth(*hash), ctl, NewWifi(systemctl{}, *revert))))
+	log.Fatal(http.ListenAndServe(*listen, newHandler(services, NewAuth(*hash), ctl, wifi)))
 }
