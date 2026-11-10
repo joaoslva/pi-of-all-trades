@@ -1,0 +1,97 @@
+/* Shared by / and /admin. Every colour is a token here; hub/web/check-contrast.mjs reads them. */
+:root {
+  color-scheme: light dark;
+  --bg: #F3EBDD;          /* parchment */
+  --card: #FFFBF4;        /* warm white */
+  --card-hi: #FFFFFF;     /* top of a raised button */
+  --sunk: #EDE3D2;        /* inputs, bar tracks, list rows */
+  --text: #3A2A1E;        /* bark brown */
+  --muted: #6A5848;
+  --line: #DCD0BD;        /* granite: card edges, separators (decorative) */
+  --field: #8C7E6D;       /* granite: input and button borders, 3:1 on cards */
+  --accent: #D98C3A;      /* alpenglow gold: primary buttons, bars */
+  --on-accent: #2B1D12;
+  --accent-ink: #8E4E12;  /* gold as text and focus ring */
+  --danger: #B5532A;      /* dogwood rust */
+  --on-danger: #FFF8F0;
+  --danger-ink: #A0441E;
+  --danger-bg: #F8E1D3;
+  --ok: #3E5B3A;          /* sequoia green */
+  --info: #4D6D78;        /* Merced blue-grey, darkened for text */
+  --info-bg: #E2EBEC;
+  --warn-bg: #FBE9CF;
+  --shadow: 59 42 30;     /* rgb triplet for soft shadows */
+  --edge: rgb(255 255 255 / .9);
+  --radius: 14px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+}
+/* The dark tokens appear twice on purpose: once for the system setting, once for the toggle.
+   check-contrast.mjs fails if the two copies differ. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1E1B16;        /* night bark */
+    --card: #2A261F;
+    --card-hi: #353027;
+    --sunk: #221F19;
+    --text: #F2E7D5;      /* warm cream */
+    --muted: #BCAE98;
+    --line: #3E382E;
+    --field: #7D7262;
+    --accent: #E09A4E;
+    --on-accent: #1E1B16;
+    --accent-ink: #EBA65C;
+    --danger: #D9693F;
+    --on-danger: #1E1B16;
+    --danger-ink: #EE8E68;
+    --danger-bg: #3D2519;
+    --ok: #8DB580;
+    --info: #93B4BE;
+    --info-bg: #23302F;
+    --warn-bg: #3A2C17;
+    --shadow: 0 0 0;
+    --edge: rgb(255 240 215 / .08);
+  }
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1E1B16;        /* night bark */
+  --card: #2A261F;
+  --card-hi: #353027;
+  --sunk: #221F19;
+  --text: #F2E7D5;      /* warm cream */
+  --muted: #BCAE98;
+  --line: #3E382E;
+  --field: #7D7262;
+  --accent: #E09A4E;
+  --on-accent: #1E1B16;
+  --accent-ink: #EBA65C;
+  --danger: #D9693F;
+  --on-danger: #1E1B16;
+  --danger-ink: #EE8E68;
+  --danger-bg: #3D2519;
+  --ok: #8DB580;
+  --info: #93B4BE;
+  --info-bg: #23302F;
+  --warn-bg: #3A2C17;
+  --shadow: 0 0 0;
+  --edge: rgb(255 240 215 / .08);
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+a { color: var(--accent-ink); }
+:focus-visible { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
+.skip { position: absolute; left: 8px; top: -60px; padding: 8px 12px; background: var(--card); border-radius: 8px; z-index: 9; }
+.skip:focus { top: 8px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.num { font-variant-numeric: tabular-nums; }
+.themebtn { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  color: var(--accent-ink); background: var(--card-hi); box-shadow: inset 0 1px 0 var(--edge), 0 2px 6px rgb(var(--shadow) / .14); }
+.themebtn:hover { color: var(--text); }
+.themebtn .sun { display: none; }
+.themebtn[data-mode="dark"] .sun { display: block; }
+.themebtn[data-mode="dark"] .moon { display: none; }

@@ -1,0 +1,26 @@
+#!/bin/sh
+# Fake systemctl for the laptop sandbox. $PIHUB_FAKE/units holds "unit state memory-bytes" lines;
+# a unit not listed is inactive. reboot and poweroff are only logged.
+set -u
+F="${PIHUB_FAKE:?PIHUB_FAKE is not set: refusing to run outside the sandbox}"
+echo "systemctl $*" >>"$F/log"
+[ "$*" = --fake-check ] && { echo fake; exit 0; }
+set_state() { # set_state <unit> <state>
+  awk -v u="$1" -v s="$2" '$1 == u { $2 = s; hit = 1 } { print } END { if (!hit) print u, s, 0 }' "$F/units" >"$F/units.tmp"
+  mv "$F/units.tmp" "$F/units"
+}
+case "$1" in
+  show)
+    unit="$4"
+    set -- $(awk -v u="$unit" '$1 == u { print $2, $3 }' "$F/units")
+    state="${1:-inactive}"; mem="${2:-0}"
+    case "$state" in active|activating) ;; *) mem="[not set]" ;; esac
+    printf 'ActiveState=%s\nSubState=%s\nMemoryCurrent=%s\n' "$state" "$state" "$mem" ;;
+  list-units) # list-units 'x@*.service' --state=... --no-legend
+    pat="$(printf '%s' "$2" | sed 's/\*.*//')"
+    awk -v p="$pat" 'index($1, p) == 1 && ($2 == "active" || $2 == "activating") { print $1, "loaded", $2, "running" }' "$F/units" ;;
+  start) sleep 1; set_state "$2" active ;;
+  stop) sleep 1; set_state "$2" inactive ;;
+  reboot|poweroff) echo "fake: would $1 (nothing happens in the sandbox)" >&2 ;;
+  *) echo "fake systemctl: unhandled: $*" >&2; exit 2 ;;
+esac

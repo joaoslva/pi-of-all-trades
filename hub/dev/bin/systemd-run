@@ -1,0 +1,10 @@
+#!/bin/sh
+# Fake systemd-run: the hub only uses it to arm the Wi-Fi revert. It marks the revert timer
+# active and never runs the command, so the sandbox stays on "waiting for Keep".
+set -u
+F="${PIHUB_FAKE:?PIHUB_FAKE is not set: refusing to run outside the sandbox}"
+echo "systemd-run $*" >>"$F/log"
+[ "$*" = --fake-check ] && { echo fake; exit 0; }
+awk '$1 != "pihub-wifi-revert.timer"' "$F/units" >"$F/units.tmp"
+echo "pihub-wifi-revert.timer active 0" >>"$F/units.tmp"
+mv "$F/units.tmp" "$F/units"

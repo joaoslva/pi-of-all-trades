@@ -1,0 +1,50 @@
+#!/bin/sh
+# Fake nmcli for the laptop sandbox. State lives in $PIHUB_FAKE (see hub/dev/scenario.sh):
+#   saved   one "name|ssid|mode" per line     active  the profile on wlan0 ("" = none)
+#   broken  present: every call fails          fail-up profile names whose `connection up` fails
+set -u
+F="${PIHUB_FAKE:?PIHUB_FAKE is not set: refusing to run outside the sandbox}"
+TD="$(dirname "$0")/../../testdata/nmcli"
+echo "nmcli $*" >>"$F/log"
+[ "$*" = --fake-check ] && { echo fake; exit 0; }
+[ -e "$F/broken" ] && { echo "Error: NetworkManager is not running." >&2; exit 8; }
+active="$(cat "$F/active" 2>/dev/null)"
+esc() { printf '%s' "$1" | sed 's/[\\:]/\\&/g'; }
+arg() { # arg <flag> "$@": the word after <flag>
+  want="$1"; shift
+  while [ $# -gt 1 ]; do [ "$1" = "$want" ] && { echo "$2"; return; }; shift; done
+}
+line() { awk -F'|' -v n="$1" '$1 == n' "$F/saved"; } # the saved entry named exactly $1
+case "$*" in
+  "-t -f NAME,UUID,TYPE,DEVICE connection show")
+    i=0
+    while IFS='|' read -r name ssid mode; do
+      i=$((i + 1)); dev=""; [ "$name" = "$active" ] && dev=wlan0
+      echo "$(esc "$name"):00000000-0000-0000-0000-00000000000$i:802-11-wireless:$dev"
+    done <"$F/saved"
+    echo "lo:00000000-0000-0000-0000-0000000000ff:loopback:lo" ;;
+  "-t -f NAME,DEVICE connection show --active")
+    [ -n "$active" ] && echo "$(esc "$active"):wlan0"
+    echo "lo:lo" ;;
+  "-t -f 802-11-wireless.ssid,802-11-wireless.mode connection show id "*)
+    name="${*#*connection show id }"
+    line "$name" | while IFS='|' read -r n ssid mode; do
+      echo "802-11-wireless.ssid:$(esc "$ssid")"; echo "802-11-wireless.mode:$mode"
+    done ;;
+  "-t -g IP4.ADDRESS device show wlan0") cat "$TD/ip.txt" ;;
+  "-t -f IN-USE,SIGNAL,SECURITY,SSID device wifi list"*) sleep 1; cat "$TD/scan-mixed.txt" ;;
+  "-w 20 connection up id "*)
+    name="${*#*connection up id }"
+    sleep 1
+    if grep -qxF "$name" "$F/fail-up" 2>/dev/null; then
+      echo "Error: Connection activation failed: Secrets were required, but not provided." >&2; exit 4
+    fi
+    printf '%s\n' "$name" >"$F/active" ;;
+  "connection add "*)
+    name="$(arg con-name "$@")"; ssid="$(arg ssid "$@")"
+    echo "$name|$ssid|infrastructure" >>"$F/saved" ;;
+  "connection delete id "*)
+    name="${*#*connection delete id }"
+    awk -F'|' -v n="$name" '$1 != n' "$F/saved" >"$F/saved.tmp"; mv "$F/saved.tmp" "$F/saved" ;;
+  *) echo "fake nmcli: unhandled: $*" >&2; exit 2 ;;
+esac
