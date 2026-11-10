@@ -84,11 +84,14 @@ else
 fi
 pi 'sudo -n systemctl start camera-drive-web'
 
-report "camera plug-in starts camera-offload@ and camera-live once" skip "camera not plugged in"
+# Never reboot in the middle of an offload.
+idle() { [ -z "$(pi 'systemctl list-units "camera-offload@*" --state=activating,active --no-legend')" ]; }
+wait_for 900 idle || echo "INFO  offload still running after 15 min, rebooting anyway"
 
 # Reboot, then both units active.
 boot_id() { pi cat /proc/sys/kernel/random/boot_id; }
 before="$(boot_id)"
+had_camera=0; pi lsusb | grep -q '08ca:202[23]' && had_camera=1
 pi 'sudo -n systemctl reboot' >/dev/null 2>&1
 sleep 15
 if wait_for 180 pi true 2>/dev/null && [ "$(boot_id)" != "$before" ]; then
@@ -96,6 +99,26 @@ if wait_for 180 pi true 2>/dev/null && [ "$(boot_id)" != "$before" ]; then
   wait_for 60 both && report "after reboot pihub and camera-drive-web are active" 0 || report "after reboot pihub and camera-drive-web are active" 1
 else
   report "after reboot pihub and camera-drive-web are active" 1 "Pi did not come back"
+fi
+
+# Camera checks look at this boot's journal only; they never touch the camera's storage.
+# The camera enumerates late in boot, so wait for it if it was there before.
+[ "$had_camera" = 0 ] || wait_for 120 pi "lsusb | grep -q '08ca:202[23]'"
+sleep 5
+usb="$(pi lsusb)"
+if grep -q '08ca:2023' <<<"$usb"; then
+  n="$(pi 'journalctl -b -u "camera-offload@*" --no-pager | grep -c "Started camera-offload@"')"
+  [ "$n" = 1 ] && report "camera plugged in (storage) starts camera-offload@ once" 0 || report "camera plugged in (storage) starts camera-offload@ once" 1 "started $n times"
+elif grep -q '08ca:2022' <<<"$usb"; then
+  n="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
+  if [ "$n" = 1 ] && pi 'systemctl -q is-active camera-live'; then
+    report "camera plugged in (live) has camera-live active, started once" 0
+  else
+    report "camera plugged in (live) has camera-live active, started once" 1 "started $n times"
+  fi
+else
+  [ "$had_camera" = 1 ] && report "camera came back after reboot" 1 "08ca:202x gone" ||
+    report "camera plug-in starts camera-offload@ / camera-live once" skip "camera not plugged in"
 fi
 
 echo "$fails check(s) failed"
