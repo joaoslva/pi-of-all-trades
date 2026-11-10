@@ -55,7 +55,7 @@ echo "--- cloud-init-output tail ---"
 tail -25 "$MP/var/log/cloud-init-output.log" 2>/dev/null || echo "  no output log"
 
 hdr "were the packages installed?"
-for p in ffmpeg v4l-utils rsync avahi-daemon python3-flask; do
+for p in ffmpeg v4l-utils rsync avahi-daemon; do
   if chroot "$MP" dpkg -s "$p" >/dev/null 2>&1; then echo "  ok      $p"; else echo "  MISSING $p"; fi
 done 2>/dev/null || echo "  (chroot unavailable on this arch, checking dpkg list instead)"
 grep -cE '^Package: (ffmpeg|rsync|avahi-daemon)$' "$MP/var/lib/dpkg/status" 2>/dev/null | xargs -I{} echo "  {} of 3 key packages present in dpkg status"

@@ -1,5 +1,9 @@
 # History and working notes
 
+## The rename (2026-11-10)
+
+The Pi stopped being only the camera box: it hosts several services behind a landing page and an admin page. It is now `pi-of-all-trades`: the hostname (`pi-of-all-trades.local`), the Wi-Fi hotspot name, and the GitHub repo (it was `pi-apitek-web-interface`, before that `pi-apitek-dashboard`). The camera service keeps its own names (`camera-drive`, its units and folders), and the NetworkManager profile names `camera-drive-wifi` and `camera-drive-ap` are internal and unchanged.
+
 ## The pi-mobile-server detour (2026-09-11 to 2026-09-18)
 
 For a week this repo was `pi-mobile-server`: the Pi as a pocket server running

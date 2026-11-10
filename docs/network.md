@@ -4,8 +4,8 @@ The Pi has two network modes. Only these are supported.
 
 | Mode | What it is | Address |
 |---|---|---|
-| Client | The Pi joins a Wi-Fi network (home, a phone hotspot, ...) through a saved NetworkManager profile. | the LAN's DHCP address, and `cameradrive.local` |
-| Hotspot | The Pi raises its own network `camera-drive` (profile `camera-drive-ap`). No internet relay: the radio (BCM43430) cannot be an access point and a client at once. | `http://10.42.0.1/` |
+| Client | The Pi joins a Wi-Fi network (home, a phone hotspot, ...) through a saved NetworkManager profile. | the LAN's DHCP address, and `pi-of-all-trades.local` |
+| Hotspot | The Pi raises its own network `pi-of-all-trades` (profile `camera-drive-ap`, the profile name is internal and kept). No internet relay: the radio (BCM43430) cannot be an access point and a client at once. | `http://10.42.0.1/` |
 
 Two things manage this, and they are separate on purpose:
 
@@ -48,7 +48,7 @@ Everything goes through `nmcli -t` (parsed by pure functions in `hub/wifi.go`) a
 
 1. Write `/run/pihub/wifi-switching` (timestamp inside, mtime used by the script). The directory is created by `RuntimeDirectory=pihub` and preserved across hub restarts.
 2. Arm a revert: `systemd-run --collect --unit=pihub-wifi-revert --on-active=<N> sh -c 'nmcli -w 30 connection up id "$1"; rm -f <flag>' sh <previous>` (when the previous connection is the hotspot it also touches the hold). It is a root transient unit, independent of the hub: killing the hub does not cancel it. If arming fails, nothing is switched.
-3. `nmcli -w 20 connection up id <new>`. Answer: the new address (`cameradrive.local` and the IP if known) and the deadline.
+3. `nmcli -w 20 connection up id <new>`. Answer: the new address (`pi-of-all-trades.local` and the IP if known) and the deadline.
 4. The page shows **Keep this network** (also after a reload: the timer being armed is the truth). Keep stops `pihub-wifi-revert.timer`, removes the flag and records the network as `last_client`.
 5. Without Keep, the timer fires, brings the previous profile back and removes the flag. If even that fails, the flag is gone and the fallback raises the hotspot as usual.
 
@@ -71,9 +71,9 @@ With no active connection there is nothing to return to: no revert, a failed att
 
 The checks never raise the real hotspot (unit tests with a fake `nmcli` and the fallback script with a fake `nmcli` cover the logic). To test it by hand, with a laptop on the same LAN, arm a revert first:
 
-    ssh joao@cameradrive.local 'sudo systemd-run --unit=manual-revert --on-active=300 nmcli connection up id camera-drive-wifi'
+    ssh joao@pi-of-all-trades.local 'sudo systemd-run --unit=manual-revert --on-active=300 nmcli connection up id camera-drive-wifi'
 
-On demand (the normal way): on the admin page press **Turn on hotspot**, read the dialog, confirm. The page stops answering; join `camera-drive` on the phone and open `http://10.42.0.1/admin`. The hotspot must stay up for several minutes (the fallback sees the hold and does not rejoin). Press **Leave hotspot**, confirm: the Pi joins the last working network (shown on the page); press **Keep this network** at its address. `sudo systemctl stop manual-revert.timer` at the end. A reboot also ends a hold. Turn VPN off on the phone first (see `docs/camera-drive.md`, "If the AP loads nothing on your phone").
+On demand (the normal way): on the admin page press **Turn on hotspot**, read the dialog, confirm. The page stops answering; join `pi-of-all-trades` on the phone and open `http://10.42.0.1/admin`. The hotspot must stay up for several minutes (the fallback sees the hold and does not rejoin). Press **Leave hotspot**, confirm: the Pi joins the last working network (shown on the page); press **Keep this network** at its address. `sudo systemctl stop manual-revert.timer` at the end. A reboot also ends a hold. Turn VPN off on the phone first (see `docs/camera-drive.md`, "If the AP loads nothing on your phone").
 
 By fallback (no hold): make the known SSID vanish (switch the router off, or `sudo nmcli connection modify camera-drive-wifi 802-11-wireless.ssid nonexistent-test && sudo nmcli connection down camera-drive-wifi`). Within about 40 s `camera-drive` appears; the page says "raised automatically". Then `kill -9` the hub (`sudo kill -9 $(systemctl show -p MainPID --value pihub)`) and confirm the hotspot stays up and the hub returns in a few seconds. Restore the SSID afterwards.
 

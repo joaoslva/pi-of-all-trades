@@ -48,7 +48,7 @@ ssh -i ~/.ssh/pi_camera_drive joao@192.168.1.206 sudo bash -s < platform/provisi
 ```
 
 It deletes cloud-init's netplan WiFi profile (and the yaml holding the WiFi
-password in plain text), sets the hostname (`cameradrive`, or the first
+password in plain text), sets the hostname (`pi-of-all-trades`, or the first
 argument), disables ModemManager and bluetooth, removes what the
 pi-mobile-server detour installed (gateway, its user and polkit rule, the
 nftables firewall, `cgroup_enable=memory`; see `docs/history.md`), removes the

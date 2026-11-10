@@ -18,7 +18,7 @@ PI="${PI:-joao@192.168.1.206}"
 KEY="${KEY:-$HOME/.ssh/pi_camera_drive}"
 SSH_OPTS=(-i "$KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 
-AP_SSID="${AP_SSID:-camera-drive}"
+AP_SSID="${AP_SSID:-pi-of-all-trades}"
 AP_CON=camera-drive-ap
 
 die() { printf '\nerror: %s\n' "$1" >&2; exit 1; }

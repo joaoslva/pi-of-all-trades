@@ -13,7 +13,7 @@
 set -euo pipefail
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-NEW_HOSTNAME="${1:-cameradrive}"
+NEW_HOSTNAME="${1:-pi-of-all-trades}"
 ADMIN_USER="${ADMIN_USER:-joao}"
 
 step() { printf '\n==> %s\n' "$1"; }

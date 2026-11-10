@@ -26,7 +26,7 @@ tell which mode you plugged in as and react accordingly.
 
 ## Getting to it
 
-- On a known WiFi network: `http://cameradrive.local/` (or its IP); the camera itself is on port 8081, linked from that page
+- On a known WiFi network: `http://pi-of-all-trades.local/` (or its IP); the camera itself is on port 8081, linked from that page
 - With no network around: the Pi raises its own AP, then `http://10.42.0.1/` (camera on `:8081`)
 
 It switches between the two by itself. It prefers being a normal client; the AP
