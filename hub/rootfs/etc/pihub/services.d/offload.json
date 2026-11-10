@@ -1,0 +1,8 @@
+{
+  "id": "offload",
+  "name": "Offload",
+  "description": "Copies files off the camera when it is plugged in (storage mode)",
+  "class": "background",
+  "units": ["camera-offload@.service"],
+  "port": 0
+}
