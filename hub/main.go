@@ -123,7 +123,7 @@ func main() {
 	if err := ctl.Reconcile(); err != nil {
 		log.Printf("reconcile: %v", err) // the hub still serves; the admin page shows what is running
 	}
-wifi := NewWifi(systemctl{}, *revert, *stateDir)
+	wifi := NewWifi(systemctl{}, *revert, *stateDir)
 	wifi.Status() // records the network we are on as the last working one
 	auth := NewAuth(*hash)
 	auth.cameraDir = *camDir

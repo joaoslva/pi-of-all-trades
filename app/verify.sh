@@ -48,7 +48,7 @@ grep -q '^ExecStart=/usr/local/bin/camera-drive offload /dev/%I$' <<<"$unit" &&
   report "camera-offload@.service runs camera-drive offload /dev/%I" 0 ||
   report "camera-offload@.service runs camera-drive offload /dev/%I" 1
 if pi lsusb | grep -q '08ca:2023'; then
-  n="$(pi 'journalctl -b -u "camera-offload@*" --no-pager | grep -c "Starting camera-offload@"')"
+  n="$(pi 'journalctl -b -t systemd --no-pager | grep -c "Starting camera-offload@"')"
   [ "$n" = 1 ] && report "real camera (storage): camera-offload@ ran once this boot" 0 ||
     report "real camera (storage): camera-offload@ ran once this boot" 1 "ran $n times"
   pi 'findmnt -n /dev/sda1' | grep -q . &&
