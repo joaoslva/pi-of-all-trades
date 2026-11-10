@@ -81,7 +81,7 @@ type fakeNM struct {
 	conns  []SavedNet // Name, SSID, Hotspot
 	active string
 	calls  []string
-	failUp string // connection up fails for this profile
+	failUp map[string]bool // connection up fails for these profiles (and leaves nothing active)
 }
 
 func (f *fakeNM) Run(args ...string) (string, error) {
@@ -113,7 +113,7 @@ func (f *fakeNM) Run(args ...string) (string, error) {
 		return "", errors.New("no such connection")
 	case strings.HasPrefix(j, "-w 20 connection up id "):
 		name := strings.TrimPrefix(j, "-w 20 connection up id ")
-		if name == f.failUp {
+		if f.failUp[name] {
 			f.active = ""
 			return "", errors.New("nmcli: Connection activation failed")
 		}
@@ -145,10 +145,11 @@ func newWifiRig(t *testing.T, active string) *wifiRig {
 	r := &wifiRig{nm: &fakeNM{active: active, conns: []SavedNet{
 		{Name: "home", SSID: "HomeNet"}, {Name: "cafe", SSID: "Cafe"}, {Name: hotspotCon, SSID: "camera-drive", Hotspot: true}}},
 		sd: &fakeSD{up: map[string]bool{fallbackTimer: true}}, clock: time.Unix(5_000, 0)}
-	r.w = NewWifi(r.sd, 60)
+	r.w = NewWifi(r.sd, 60, t.TempDir())
 	r.w.nm, r.w.hostname = r.nm, "pi.local"
 	r.w.now = func() time.Time { return r.clock }
 	r.w.flagPath = filepath.Join(t.TempDir(), "run", "wifi-switching")
+	r.w.holdPath = filepath.Join(filepath.Dir(r.w.flagPath), "hotspot-hold")
 	r.w.armRevert = func(sec int, prev string) error {
 		r.armed = append(r.armed, prev)
 		r.sd.up[revertUnit+".timer"] = true
@@ -165,17 +166,52 @@ func (r *wifiRig) fire(prev string) {
 }
 
 func (r *wifiRig) flag() bool { _, err := os.Stat(r.w.flagPath); return err == nil }
+func (r *wifiRig) hold() bool { _, err := os.Stat(r.w.holdPath); return err == nil }
+func (r *wifiRig) setHold(t *testing.T) {
+	t.Helper()
+	if err := r.w.setHold(); err != nil {
+		t.Fatal(err)
+	}
+}
+func (r *wifiRig) last() string {
+	b, _ := os.ReadFile(r.w.statePath)
+	return string(b)
+}
 
 func TestStatusModes(t *testing.T) {
 	st, err := newWifiRig(t, "home").w.Status()
 	if err != nil || st.Mode != "client" || st.SSID != "HomeNet" || st.IP != "192.0.2.20" || st.Fallback != "active" || len(st.Saved) != 3 {
 		t.Fatalf("%+v %v", st, err)
 	}
-	if st, _ = newWifiRig(t, hotspotCon).w.Status(); st.Mode != "hotspot" || st.SSID != "camera-drive" || st.IP != "" {
+	if st, _ = newWifiRig(t, hotspotCon).w.Status(); st.Mode != ModeHotspotFallback || st.SSID != "camera-drive" || st.IP != "" {
 		t.Fatalf("%+v", st)
 	}
-	if st, _ = newWifiRig(t, "").w.Status(); st.Mode != "none" {
+	if st, _ = newWifiRig(t, "").w.Status(); st.Mode != ModeNone {
 		t.Fatalf("%+v", st)
+	}
+	r := newWifiRig(t, hotspotCon)
+	r.setHold(t)
+	if st, _ = r.w.Status(); st.Mode != ModeHotspotDemand {
+		t.Fatalf("%+v", st)
+	}
+}
+
+func TestDeriveMode(t *testing.T) {
+	for _, c := range []struct {
+		active        string
+		hotspot, hold bool
+		want          WifiMode
+	}{
+		{"home", false, false, ModeClient},
+		{"home", false, true, ModeClient}, // a leftover hold means nothing on a client profile
+		{hotspotCon, true, true, ModeHotspotDemand},
+		{hotspotCon, true, false, ModeHotspotFallback},
+		{"", false, true, ModeNone}, // the hold never makes "nothing active" look like a hotspot
+		{"", false, false, ModeNone},
+	} {
+		if got := deriveMode(c.active, c.hotspot, c.hold); got != c.want {
+			t.Errorf("%+v: got %s", c, got)
+		}
 	}
 }
 
@@ -257,27 +293,155 @@ func TestConnectKeepCancelsRevert(t *testing.T) {
 	}
 }
 
-func TestConnectWithoutKeepRestores(t *testing.T) {
+func TestConnectFailureRecoversAtOnce(t *testing.T) {
 	r := newWifiRig(t, "home")
-	r.nm.failUp = "cafe" // wrong password
-	if _, err := r.w.Connect("cafe"); err == nil || !strings.Contains(err.Error(), "returns in about 60 s") {
+	r.nm.failUp = map[string]bool{"cafe": true} // wrong password
+	_, err := r.w.Connect("cafe")
+	if err == nil || !strings.Contains(err.Error(), `back on "home"`) {
 		t.Fatalf("err %v", err)
 	}
-	if !r.sd.up[revertUnit+".timer"] || !r.flag() || r.nm.active != "" {
-		t.Fatal("revert must stay armed and the flag stay until it fires")
-	}
-	r.fire("home")
-	if r.nm.active != "home" || r.flag() {
-		t.Fatalf("active %s flag %v", r.nm.active, r.flag())
+	if r.nm.active != "home" || r.flag() || r.sd.up[revertUnit+".timer"] || r.hold() {
+		t.Fatalf("active %s flag %v timer %v hold %v: recovery must be immediate and clean", r.nm.active, r.flag(), r.sd.up[revertUnit+".timer"], r.hold())
 	}
 	if err := r.w.Keep(); err == nil {
-		t.Fatal("Keep after the revert ran must say so")
+		t.Fatal("Keep after the recovery must say there is nothing to keep")
 	}
 	// A second switch while one waits is refused.
 	r = newWifiRig(t, "home")
 	r.w.Connect("cafe")
 	if _, err := r.w.Connect("home"); err == nil {
 		t.Fatal("second switch accepted while waiting for Keep")
+	}
+}
+
+func TestConnectFailureLastResortHotspotWithoutHold(t *testing.T) {
+	r := newWifiRig(t, "home")
+	r.nm.failUp = map[string]bool{"cafe": true, "home": true}
+	_, err := r.w.Connect("cafe")
+	if err == nil || !strings.Contains(err.Error(), "raised its hotspot") {
+		t.Fatalf("err %v", err)
+	}
+	if r.nm.active != hotspotCon || r.hold() {
+		t.Fatalf("active %s hold %v: the last resort must not set the hold", r.nm.active, r.hold())
+	}
+	if !r.sd.up[revertUnit+".timer"] || !r.flag() {
+		t.Fatal("the armed revert and flag stay as the safety net")
+	}
+	r = newWifiRig(t, "home")
+	r.nm.failUp = map[string]bool{"cafe": true, "home": true, hotspotCon: true}
+	if _, err := r.w.Connect("cafe"); err == nil || !strings.Contains(err.Error(), "no network") || !r.sd.up[revertUnit+".timer"] {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestHotspotOn(t *testing.T) {
+	r := newWifiRig(t, "home")
+	res, err := r.w.HotspotOn()
+	if err != nil || res.SSID != "camera-drive" || res.URL != "http://10.42.0.1/admin" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if r.nm.active != hotspotCon || !r.hold() || r.flag() || len(r.armed) != 0 {
+		t.Fatalf("active %s hold %v flag %v armed %v", r.nm.active, r.hold(), r.flag(), r.armed)
+	}
+	if _, err := r.w.HotspotOn(); err == nil {
+		t.Fatal("hotspot on twice")
+	}
+	// Failure: no hold, previous client back.
+	r = newWifiRig(t, "home")
+	r.nm.failUp = map[string]bool{hotspotCon: true}
+	if _, err := r.w.HotspotOn(); err == nil || !strings.Contains(err.Error(), `back on "home"`) {
+		t.Fatalf("err %v", err)
+	}
+	if r.hold() || r.flag() || r.nm.active != "home" {
+		t.Fatalf("hold %v flag %v active %s", r.hold(), r.flag(), r.nm.active)
+	}
+	// The fallback already raised it: only the hold is added, nothing is re-activated.
+	r = newWifiRig(t, hotspotCon)
+	if _, err := r.w.HotspotOn(); err != nil || !r.hold() {
+		t.Fatalf("%v hold %v", err, r.hold())
+	}
+	for _, c := range r.nm.calls {
+		if strings.Contains(c, "connection up") {
+			t.Fatalf("re-activated the running hotspot: %v", r.nm.calls)
+		}
+	}
+}
+
+func TestHotspotOffGoesToLastClient(t *testing.T) {
+	r := newWifiRig(t, "home")
+	r.w.Status() // home is the last working client network
+	if _, err := r.w.HotspotOff(); err == nil {
+		t.Fatal("hotspot off while on a client network")
+	}
+	if _, err := r.w.HotspotOn(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.w.HotspotOff(); err != nil {
+		t.Fatal(err)
+	}
+	if r.nm.active != "home" || r.hold() || !reflect.DeepEqual(r.armed, []string{hotspotCon}) || !r.flag() {
+		t.Fatalf("active %s hold %v armed %v flag %v", r.nm.active, r.hold(), r.armed, r.flag())
+	}
+	// Failure: back on the hotspot, hold restored, timer cancelled, flag gone.
+	r = newWifiRig(t, "home")
+	r.w.Status()
+	r.w.HotspotOn()
+	r.nm.failUp = map[string]bool{"home": true}
+	if _, err := r.w.HotspotOff(); err == nil || !strings.Contains(err.Error(), `back on "camera-drive-ap"`) {
+		t.Fatalf("err %v", err)
+	}
+	if r.nm.active != hotspotCon || !r.hold() || r.flag() || r.sd.up[revertUnit+".timer"] {
+		t.Fatalf("active %s hold %v flag %v timer %v", r.nm.active, r.hold(), r.flag(), r.sd.up[revertUnit+".timer"])
+	}
+	// Nothing known to go to.
+	r = newWifiRig(t, hotspotCon)
+	if _, err := r.w.HotspotOff(); err == nil || !strings.Contains(err.Error(), "no working client network") {
+		t.Fatalf("err %v", err)
+	}
+}
+
+func TestRevertToHotspotRestoresHold(t *testing.T) {
+	if got := strings.Join(revertArgs(30, hotspotCon), "|"); !strings.HasSuffix(got, "; touch /run/pihub/hotspot-hold|sh|camera-drive-ap") {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestLastClientPersisted(t *testing.T) {
+	r := newWifiRig(t, "home")
+	st, _ := r.w.Status()
+	if st.LastClient != "home" || !strings.Contains(r.last(), `"last_client":"home"`) {
+		t.Fatalf("%q %s", st.LastClient, r.last())
+	}
+	// An unkept switch does not become the last working network; Keep does.
+	r.w.Connect("cafe")
+	if st, _ = r.w.Status(); st.LastClient != "home" {
+		t.Fatalf("unkept switch counted: %q", st.LastClient)
+	}
+	if err := r.w.Keep(); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ = r.w.Status(); st.LastClient != "cafe" {
+		t.Fatalf("kept switch not recorded: %q", st.LastClient)
+	}
+	// A new hub reads the file back; hotspot mode never overwrites it.
+	w2 := NewWifi(r.sd, 60, filepath.Dir(r.w.statePath))
+	w2.nm, w2.holdPath = r.nm, r.w.holdPath
+	r.nm.active = hotspotCon
+	if st, _ = w2.Status(); st.LastClient != "cafe" {
+		t.Fatalf("not loaded: %q", st.LastClient)
+	}
+}
+
+func TestSwitchRefusals(t *testing.T) {
+	r := newWifiRig(t, hotspotCon)
+	for _, name := range []string{hotspotCon, "nope"} {
+		if _, err := r.w.Connect(name); err == nil {
+			t.Errorf("switched to %q", name)
+		}
+	}
+	// Switching from the hotspot to a client network is allowed and arms a revert to the hotspot.
+	if _, err := r.w.Connect("cafe"); err != nil || !reflect.DeepEqual(r.armed, []string{hotspotCon}) {
+		t.Fatalf("%v %v", err, r.armed)
 	}
 }
 
@@ -337,6 +501,16 @@ func TestWifiNonceBoundToOpAndTarget(t *testing.T) {
 	}
 	if code, _ := step("add", `{"ssid":"x","password":"short"}`); code != http.StatusBadRequest {
 		t.Fatalf("bad password got a nonce: %d", code)
+	}
+	n = nonce("hotspot-on", `{}`)
+	if code, _ := step("hotspot-off", `{"nonce":"`+n+`"}`); code != http.StatusBadRequest {
+		t.Fatalf("hotspot-on nonce ran hotspot-off: %d", code)
+	}
+	if code, _ := step("keep", `{"nonce":"`+n+`"}`); code != http.StatusBadRequest {
+		t.Fatalf("hotspot-on nonce ran keep: %d", code)
+	}
+	if code, _ := step("hotspot-off", `{}`); code != http.StatusBadRequest {
+		t.Fatalf("hotspot-off on a client network got a nonce: %d", code)
 	}
 	n = nonce("connect", `{"name":"cafe"}`)
 	if code, body := step("connect", `{"name":"cafe","nonce":"`+n+`"}`); code != 200 || !strings.Contains(body, `"ip":"192.0.2.20"`) {
