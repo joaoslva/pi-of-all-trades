@@ -31,6 +31,9 @@ SCAN_STAMP=/run/camera-net-fallback.scan
 # this is stale (the hub died mid-switch) and ignored, so it can never disable the fallback.
 SWITCH_FLAG="${SWITCH_FLAG:-/run/pihub/wifi-switching}"
 SWITCH_FLAG_MAX=90
+# Written by pihub when the operator turns the hotspot on from the admin page (runtime only, so a
+# reboot clears it). While hosting, the fallback then leaves the hotspot alone.
+HOLD_FLAG="${HOLD_FLAG:-/run/pihub/hotspot-hold}"
 
 log() { echo "$(date -Is) $*" >> "$LOG" 2>/dev/null; }
 
@@ -102,11 +105,13 @@ active="$(active_con)"
 
 # --- already on a real network: nothing to do -----------------------------
 if [ -n "$active" ] && [ "$active" != "$AP_CON" ]; then
+  rm -f "$HOLD_FLAG" # left over from a hotspot that is gone
   exit 0
 fi
 
 # --- currently self-hosting: look for a known network to rejoin -----------
 if [ "$active" = "$AP_CON" ]; then
+  [ -e "$HOLD_FLAG" ] && exit 0 # the operator chose the hotspot: no scan, no rejoin
   last="$(stat -c %Y "$SCAN_STAMP" 2>/dev/null || echo 0)"
   [ $(( $(date +%s) - last )) -ge "$AP_SCAN_EVERY" ] || exit 0
   # Scanning while running an AP is unreliable on a single radio, so this may
@@ -132,6 +137,8 @@ if [ "$active" = "$AP_CON" ]; then
 fi
 
 # --- nothing is up: try the known networks in range, else the AP ----------
+# A hold never suppresses this branch, and it no longer describes anything.
+rm -f "$HOLD_FLAG"
 visible="$(scan)"
 for con in "${CLIENT_CONS[@]}"; do
   in_range "$con" "$visible" || continue

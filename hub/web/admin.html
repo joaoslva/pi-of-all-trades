@@ -35,6 +35,7 @@
     <p id="keeptext"></p>
     <button id="keepbtn">Keep this network</button>
   </div>
+  <button id="hotspotbtn"></button>
   <h3>Saved networks</h3>
   <div id="saved"></div>
   <h3>Nearby networks</h3>
@@ -105,16 +106,23 @@ async function loadWifi() {
   if (!r.ok) return;
   const d = await r.json();
   wifiKnown = d;
-  const rows = {Mode: d.mode === 'hotspot' ? 'Pi hotspot (no internet)' : d.mode === 'client' ? 'Connected to a network' : 'Not connected',
+  const hosting = d.mode.startsWith('hotspot');
+  const modes = {client: 'Connected to a network', 'hotspot-on-demand': 'Pi hotspot, turned on by you (no internet)',
+    'hotspot-fallback': 'Pi hotspot, raised automatically (no internet)', none: 'Not connected'};
+  const rows = {Mode: modes[d.mode] || d.mode,
     Network: d.ssid || 'none', Address: d.ip ? d.ip + ' / ' + d.hostname : d.hostname,
+    'Last working network': d.last_client || 'none yet',
     'Hotspot fallback': d.fallback_timer === 'active' ? 'watching' : 'NOT RUNNING (' + d.fallback_timer + ')'};
   $('wifi').replaceChildren(...Object.entries(rows).flatMap(([k, v]) => [text('dt', k), text('dd', v)]));
+  const hb = $('hotspotbtn');
+  hb.textContent = hosting ? 'Leave hotspot' : 'Turn on hotspot';
+  hb.onclick = hosting ? leaveHotspot : turnOnHotspot;
   $('saved').replaceChildren(...d.saved.map(n => {
     const box = text('div', '', 'svc');
     box.append(text('strong', n.name + (n.active ? ' (in use)' : n.hotspot ? ' (hotspot)' : '')), text('small', n.ssid));
     if (!n.active && !n.hotspot) {
       const row = text('div', '', 'row');
-      const go = text('button', 'Connect');
+      const go = text('button', 'Switch');
       go.onclick = () => connectTo(n.name);
       const del = text('button', 'Forget');
       del.onclick = async () => { if (await wifiCall('forget', {name: n.name}, 'Forget ' + n.name + '?')) loadWifi(); };
@@ -124,7 +132,7 @@ async function loadWifi() {
   }));
   $('keep').hidden = !d.revert_armed;
   if (d.revert_armed) $('keeptext').textContent = 'A network switch is waiting. If you can read this at the new address, keep it; otherwise the previous network returns by itself within ' + d.revert_seconds + ' s.';
-  if (d.mode === 'hotspot') $('nearby').replaceChildren(text('p', 'Scanning is off in hotspot mode because it would drop the hotspot. Enter the network name by hand below.'));
+  if (hosting) $('nearby').replaceChildren(text('p', 'Scanning is off in hotspot mode because it would drop the hotspot. Enter the network name by hand below.'));
 }
 async function scan() {
   const r = await fetch('/admin/api/wifi/scan');
@@ -137,10 +145,24 @@ async function scan() {
   }));
 }
 async function connectTo(name) {
-  const prev = wifiKnown.ssid || 'the current network';
-  const res = await wifiCall('connect', {name}, 'Switch Wi-Fi to ' + name + '? This page may disconnect. Unless you press Keep within ' + wifiKnown.revert_seconds + ' s, the Pi goes back to ' + prev + '.');
+  const cur = wifiKnown.active || 'no network';
+  const res = await wifiCall('connect', {name}, 'Switch Wi-Fi from ' + cur + ' to ' + name + '? This page may stop answering. Unless you press Keep within ' + wifiKnown.revert_seconds + ' s, the Pi goes back to ' + cur + '. If ' + name + ' fails to connect, it goes back at once.');
   if (!res) return;
   $('msg').textContent = 'Switched. Open http://' + (res.ip || res.hostname) + '/admin and press Keep this network' + (res.ip ? ' (also ' + res.hostname + ')' : '') + '.';
+  loadWifi();
+}
+async function turnOnHotspot() {
+  const ap = wifiKnown.saved.find(n => n.hotspot);
+  if (!ap) { $('msg').textContent = 'No hotspot profile on this Pi.'; return; }
+  const res = await wifiCall('hotspot-on', {}, 'Turn on the hotspot ' + ap.ssid + '? The Pi leaves ' + (wifiKnown.ssid || 'its current network') + ' and this page will stop answering. Join the Wi-Fi ' + ap.ssid + ' on your phone and open http://10.42.0.1/admin. It stays on until you choose Leave hotspot or reboot the Pi.');
+  if (res) $('msg').textContent = 'Hotspot on. Join ' + res.ssid + ' and open ' + res.url;
+  loadWifi();
+}
+async function leaveHotspot() {
+  const last = wifiKnown.last_client;
+  const res = await wifiCall('hotspot-off', {}, 'Leave the hotspot and switch to ' + last + '? This page will stop answering. Unless you press Keep within ' + wifiKnown.revert_seconds + ' s at the new address, or if ' + last + ' fails, the Pi goes back to the hotspot.');
+  if (!res) return;
+  $('msg').textContent = 'Switched. Open http://' + (res.ip || res.hostname) + '/admin and press Keep this network.';
   loadWifi();
 }
 $('keepbtn').onclick = async () => {
@@ -149,7 +171,7 @@ $('keepbtn').onclick = async () => {
 $('add').onsubmit = async e => {
   e.preventDefault();
   const body = Object.fromEntries(new FormData(e.target));
-  if (await wifiCall('add', body, 'Save ' + body.ssid + '?')) { e.target.reset(); $('msg').textContent = 'Saved. Use Connect to switch to it.'; loadWifi(); }
+  if (await wifiCall('add', body, 'Save ' + body.ssid + '?')) { e.target.reset(); $('msg').textContent = 'Saved. Use Switch to change to it.'; loadWifi(); }
 };
 async function refresh() {
   const r = await fetch('/admin/api/stats');
