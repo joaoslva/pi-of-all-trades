@@ -205,6 +205,29 @@ func (a *Auth) login(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// issueNonce returns a one-time token that confirms exactly this action for nonceTTL.
+func (a *Auth) issueNonce(action string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	n := randomHex()
+	a.nonces[n] = nonce{action, a.now().Add(nonceTTL)}
+	for k, v := range a.nonces {
+		if a.now().After(v.expires) {
+			delete(a.nonces, k)
+		}
+	}
+	return n
+}
+
+// spendNonce is true once per token, and only for the action it was issued for.
+func (a *Auth) spendNonce(token, action string) bool {
+	a.mu.Lock()
+	n, ok := a.nonces[token]
+	delete(a.nonces, token) // single use, even when it fails below
+	a.mu.Unlock()
+	return ok && n.action == action && !a.now().After(n.expires)
+}
+
 // power is two steps: {"action":"reboot"} returns a one-time nonce, then
 // {"action":"reboot","nonce":"..."} runs it.
 func (a *Auth) power(w http.ResponseWriter, r *http.Request) {
@@ -214,23 +237,11 @@ func (a *Auth) power(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `action must be "reboot" or "poweroff"`, http.StatusBadRequest)
 		return
 	}
-	a.mu.Lock()
 	if req.Nonce == "" {
-		n := randomHex()
-		a.nonces[n] = nonce{req.Action, a.now().Add(nonceTTL)}
-		for k, v := range a.nonces {
-			if a.now().After(v.expires) {
-				delete(a.nonces, k)
-			}
-		}
-		a.mu.Unlock()
-		json.NewEncoder(w).Encode(map[string]string{"nonce": n})
+		json.NewEncoder(w).Encode(map[string]string{"nonce": a.issueNonce(req.Action)})
 		return
 	}
-	n, ok := a.nonces[req.Nonce]
-	delete(a.nonces, req.Nonce) // single use, even when it fails below
-	a.mu.Unlock()
-	if !ok || n.action != req.Action || a.now().After(n.expires) {
+	if !a.spendNonce(req.Nonce, req.Action) {
 		http.Error(w, "nonce invalid or expired", http.StatusBadRequest)
 		return
 	}
