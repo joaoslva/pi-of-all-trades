@@ -24,7 +24,7 @@ Selected videos can also be exported as MP4, MOV, WebM or MP3. Conversion runs
 as a background job the page polls, because a long tape takes minutes and a
 phone browser will not sit on a silent request that long.
 
-Served by waitress on port 80 so the Pi is reachable at a bare IP from a phone.
+Served by waitress on port 8081; the hub (pihub) owns port 80 and links here.
 """
 
 from __future__ import annotations
@@ -1466,7 +1466,7 @@ PAGE = PAGE.replace("__ICON_INLINE__", ICON_INLINE).replace("__ICON_URI__", ICON
 
 def main() -> int:
     from waitress import serve
-    port = int(os.environ.get("PORT", "80"))
+    port = int(os.environ.get("PORT", "8081"))
     THUMBS.mkdir(parents=True, exist_ok=True)
     PROXY.mkdir(parents=True, exist_ok=True)
     TMP.mkdir(parents=True, exist_ok=True)
