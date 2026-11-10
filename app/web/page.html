@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>CAMERA-DRIVE</title>
+<link rel="icon" href="__ICON_URI__">
+<style>
+  /* Dark is the primary design; light is a full re-skin of the same tokens. */
+  :root{
+    --bg:#17150F; --panel:#211E18; --panel2:#2B2720; --line:#4A4133;
+    --fg:#EDE4D3; --dim:#9A8F7C;
+    --orange:#DFA05D; --red:#AC5045; --green:#658761;
+    --shadow:3px 3px 0 #0c0b08; --scan:rgba(0,0,0,.16);
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#E9E0C9; --panel:#DED3B6; --panel2:#D2C6A4; --line:#8B7F5F;
+      --fg:#241F16; --dim:#6A6047;
+      --orange:#B0722C; --red:#96382E; --green:#4C6647;
+      --shadow:3px 3px 0 #8B7F5F; --scan:rgba(0,0,0,.05);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#E9E0C9; --panel:#DED3B6; --panel2:#D2C6A4; --line:#8B7F5F;
+    --fg:#241F16; --dim:#6A6047;
+    --orange:#B0722C; --red:#96382E; --green:#4C6647;
+    --shadow:3px 3px 0 #8B7F5F; --scan:rgba(0,0,0,.05);
+  }
+
+  *{box-sizing:border-box}
+  /* MUST come before any rule that sets display. The hidden attribute only
+     works via a UA rule of display:none, so an author rule like
+     .lb{display:flex} silently overrides it and the element is permanently
+     visible -- which, for a position:fixed inset:0 lightbox, means it covers
+     the whole app and the close button appears to do nothing. */
+  [hidden]{display:none !important}
+  html,body{background:var(--bg);color:var(--fg)}
+  body{margin:0;font:13px/1.5 ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;
+       padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 76px);
+       -webkit-font-smoothing:none}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
+    background:repeating-linear-gradient(180deg,var(--scan) 0 1px,transparent 1px 3px)}
+  img{image-rendering:pixelated}
+
+  header{position:sticky;top:0;z-index:10;background:var(--panel);
+         border-bottom:2px solid var(--line)}
+  .titlebar{display:flex;align-items:center;gap:8px;padding:6px 8px;
+            background:var(--orange);color:#17150F;border-bottom:2px solid var(--line)}
+  .titlebar svg{width:18px;height:18px;display:block;flex:none}
+  .titlebar b{font-size:13px;letter-spacing:2px}
+  .titlebar .fill{flex:1;height:9px;opacity:.5;
+    background:repeating-linear-gradient(90deg,#17150F 0 2px,transparent 2px 4px)}
+  .tbtn{font:inherit;font-size:12px;line-height:1;padding:4px 7px;cursor:pointer;
+        background:transparent;color:#17150F;border:2px solid #17150F}
+  .tbtn:active{transform:translate(1px,1px)}
+
+  .meta{padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+  .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .spread{justify-content:space-between}
+  .pill{font-size:11px;letter-spacing:.6px;text-transform:uppercase;padding:3px 7px;
+        border:2px solid var(--line);color:var(--dim);white-space:nowrap;background:var(--panel2)}
+  .pill.on{color:var(--green);border-color:var(--green)}
+  .pill.live{color:var(--orange);border-color:var(--orange)}
+  .pill.rec{color:var(--red);border-color:var(--red)}
+  .gauge{font-size:12px;letter-spacing:-1px;color:var(--line)}
+  .gauge b{color:var(--green);font-weight:400}
+  .muted{color:var(--dim);font-size:11.5px}
+
+  nav{display:flex;border-top:2px solid var(--line)}
+  nav button{flex:1;font:inherit;font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;
+    padding:10px 4px;background:var(--panel2);color:var(--dim);border:0;
+    border-right:2px solid var(--line);cursor:pointer}
+  nav button:last-child{border-right:0}
+  nav button[aria-selected="true"]{background:var(--orange);color:#17150F;font-weight:700}
+
+  main{padding:12px 10px}
+  section{margin-bottom:20px}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:1.6px;color:var(--orange);
+     margin:0 0 9px;font-weight:700;border-bottom:2px solid var(--line);padding-bottom:5px}
+  h2 span{color:var(--dim);font-weight:400;letter-spacing:.5px;text-transform:none}
+
+  .grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(98px,1fr))}
+  .cell{position:relative;aspect-ratio:1;overflow:hidden;display:block;cursor:pointer;
+        background:var(--panel);border:2px solid var(--line);box-shadow:var(--shadow)}
+  .cell img{width:100%;height:100%;object-fit:cover;display:block}
+  .cell .badge{position:absolute;left:0;bottom:0;background:#17150Fdd;color:#EDE4D3;
+    font-size:9.5px;padding:2px 4px;border-top:2px solid var(--line);border-right:2px solid var(--line)}
+  .cell.sel{border-color:var(--green);box-shadow:0 0 0 2px var(--green)}
+  .cell .tick{position:absolute;right:4px;top:4px;width:20px;height:20px;
+    border:2px solid var(--line);background:#17150Fcc;color:transparent;
+    font-size:13px;line-height:16px;text-align:center}
+  .cell.sel .tick{background:var(--green);color:#12160f;border-color:var(--green)}
+
+  button.btn{font:inherit;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;
+    padding:11px 15px;background:var(--panel2);color:var(--fg);
+    border:2px solid var(--line);box-shadow:var(--shadow);cursor:pointer}
+  button.btn:active{transform:translate(3px,3px);box-shadow:none}
+  button.btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+  button.shoot{background:var(--green);color:#12160f;border-color:var(--green);font-weight:700}
+  button.rec{background:var(--red);color:#fff2ee;border-color:var(--red);font-weight:700}
+  button.stop{background:var(--orange);color:#17150F;border-color:var(--orange);font-weight:700}
+  button.danger{color:var(--red);border-color:var(--red)}
+  button.small{padding:7px 10px;font-size:11px}
+
+  .viewer{border:2px solid var(--line);background:#000;box-shadow:var(--shadow);
+    aspect-ratio:464/480;max-height:54vh;margin:0 auto 12px;display:flex;
+    align-items:center;justify-content:center;overflow:hidden}
+  .viewer img{width:100%;height:100%;object-fit:contain;display:block}
+  .viewer .off{color:var(--dim);font-size:11.5px;text-align:center;padding:18px;line-height:1.9}
+  .reclamp{display:inline-block;width:9px;height:9px;background:var(--red);
+    margin-right:6px;vertical-align:-1px;animation:bl 1s steps(1) infinite}
+  @keyframes bl{50%{opacity:.15}}
+
+  /* All / Photos / Videos */
+  .seg{display:flex;border:2px solid var(--line);box-shadow:var(--shadow);margin-bottom:12px}
+  .seg button{flex:1;font:inherit;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;
+    padding:7px 4px;background:var(--panel2);color:var(--dim);border:0;
+    border-right:2px solid var(--line);cursor:pointer}
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);font-weight:700}
+
+  select{font:inherit;font-size:11px;padding:6px 4px;background:var(--panel2);color:var(--fg);
+    border:2px solid var(--line);max-width:100%}
+  .fmtlist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+  .fmtlist label{display:flex;gap:8px;align-items:baseline;padding:7px 8px;cursor:pointer;
+    border:2px solid var(--line);background:var(--panel2)}
+  .fmtlist label:has(input:checked){border-color:var(--green)}
+  .fmtlist input{accent-color:var(--green)}
+  .fmtlist small{color:var(--dim);font-size:10.5px}
+
+  /* selection action bar */
+  .actionbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);
+    border-top:2px solid var(--line);padding:10px;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom));
+    display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  /* The format picker takes its own row under count and buttons. */
+  .actionbar label{order:3;flex-basis:100%;font-size:11px;color:var(--dim);
+    display:flex;gap:6px;align-items:center}
+  .actionbar label select{flex:1}
+  body.selecting{padding-bottom:calc(env(safe-area-inset-bottom) + 130px)}
+
+  /* lightbox */
+  .lb{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;
+      flex-direction:column}
+  .lb .lbhead{display:flex;align-items:center;gap:8px;padding:8px 10px;
+    background:var(--orange);color:#17150F;border-bottom:2px solid var(--line)}
+  .lb .lbhead b{flex:1;font-size:11.5px;letter-spacing:.5px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .lb .lbstage{flex:1;display:flex;align-items:center;justify-content:center;
+    background:#000;overflow:hidden;min-height:0}
+  .lb .lbstage img,.lb .lbstage video{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  .lb .lbnote{color:var(--dim);text-align:center;padding:22px;line-height:1.9;font-size:11.5px}
+  .lb .lbfoot{display:flex;gap:8px;align-items:center;justify-content:space-between;
+    padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom));
+    background:var(--panel);border-top:2px solid var(--line)}
+  .lb .count{font-size:11px;color:var(--dim)}
+
+  dialog{border:2px solid var(--line);background:var(--panel);color:var(--fg);
+    box-shadow:6px 6px 0 var(--line);padding:0;max-width:min(430px,92vw);font:inherit;font-size:12.5px}
+  dialog::backdrop{background:#17150Fd9}
+  .dlghead{background:var(--red);color:#fff2ee;padding:7px 10px;font-weight:700;
+    letter-spacing:1.4px;text-transform:uppercase;font-size:11.5px}
+  .dlghead.calm{background:var(--orange);color:#17150F}
+  .dlgbody{padding:13px}
+  .empty{color:var(--dim);text-align:center;padding:40px 16px;line-height:2}
+  code{background:var(--panel2);border:2px solid var(--line);padding:1px 5px;color:var(--orange)}
+</style>
+</head>
+<body>
+<header>
+  <div class="titlebar">
+    __ICON_INLINE__
+    <b>CAMERA-DRIVE</b><span class="fill"></span>
+    <button class="tbtn" id="theme" title="light / dark">◐</button>
+  </div>
+  <div class="meta">
+    <div class="row">
+      <span class="pill" id="cam">CAMERA: ...</span>
+      <span class="pill" id="last">...</span>
+    </div>
+    <div class="row spread">
+      <span class="gauge" id="gauge"></span>
+      <span class="muted" id="held"></span>
+    </div>
+  </div>
+  <nav role="tablist">
+    <button role="tab" data-tab="live" aria-selected="true">Live</button>
+    <button role="tab" data-tab="disk" aria-selected="false">Disk</button>
+    <button role="tab" data-tab="caps" aria-selected="false">Captures</button>
+  </nav>
+</header>
+
+<main>
+  <div id="tab-live">
+    <div class="viewer" id="viewer"><div class="off">connecting...</div></div>
+    <div class="row" style="justify-content:center">
+      <button class="btn" id="vf">▶ Viewfinder</button>
+      <button class="btn shoot" id="shoot" disabled>● Shoot</button>
+      <button class="btn rec" id="rec" disabled>⏺ Record</button>
+    </div>
+    <p class="muted" style="text-align:center;margin-top:12px" id="livehint"></p>
+  </div>
+
+  <div id="tab-disk" hidden>
+    <div class="row spread" style="margin-bottom:12px">
+      <button class="btn small" data-select="disk">Select</button>
+      <button class="btn small danger" id="wipe" disabled>Wipe camera</button>
+    </div>
+    <div class="seg" data-filter="disk">
+      <button data-f="all" aria-pressed="true">All</button>
+      <button data-f="image" aria-pressed="false">Photos</button>
+      <button data-f="video" aria-pressed="false">Videos</button>
+    </div>
+    <div id="disk"></div>
+  </div>
+
+  <div id="tab-caps" hidden>
+    <div class="row spread" style="margin-bottom:12px">
+      <button class="btn small" data-select="caps">Select</button>
+      <span class="muted">shot through this app</span>
+    </div>
+    <div class="seg" data-filter="caps">
+      <button data-f="all" aria-pressed="true">All</button>
+      <button data-f="image" aria-pressed="false">Photos</button>
+      <button data-f="video" aria-pressed="false">Videos</button>
+    </div>
+    <div id="caps"></div>
+  </div>
+</main>
+
+<div class="actionbar" id="actionbar" hidden>
+  <span id="selcount">0 selected</span>
+  <label id="selfmtwrap" hidden>videos as
+    <select id="selfmt"></select></label>
+  <span class="row">
+    <button class="btn small" id="selcancel">Cancel</button>
+    <button class="btn small shoot" id="seldl">Download</button>
+  </span>
+</div>
+
+<div class="lb" id="lb" hidden>
+  <div class="lbhead"><b id="lbname"></b>
+    <button class="tbtn" id="lbclose">✕</button></div>
+  <div class="lbstage" id="lbstage"></div>
+  <div class="lbfoot">
+    <button class="btn small" id="lbprev">‹ Prev</button>
+    <span class="count" id="lbcount"></span>
+    <button class="btn small" id="lbsound" hidden>♪ Sound</button>
+    <button class="btn small" id="lbdl">Save</button>
+    <button class="btn small" id="lbnext">Next ›</button>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <div class="dlghead" id="dlghead">Confirm</div>
+  <div class="dlgbody">
+    <div id="dlgBody"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:15px">
+      <button class="btn small" id="cancel">Cancel</button>
+      <button class="btn small rec" id="confirm" hidden>OK</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const fmt=b=>b>=1073741824?(b/1073741824).toFixed(1)+'G':b>=1048576?(b/1048576).toFixed(1)+'M'
+   :b>=1024?(b/1024).toFixed(0)+'K':b+'B';
+// Fills by space REMAINING, matching the "free" figure beside it.
+const bar=f=>{const n=16,on=Math.max(0,Math.min(n,Math.round(f/100*n)));
+  return '<b>'+'█'.repeat(on)+'</b>'+'░'.repeat(n-on);};
+
+let state=null, tab='live', streaming=false;
+let selMode=null, sel=new Set(), lbList=[], lbIdx=0;
+
+// localStorage can throw (private windows); these are conveniences only.
+const store={get:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},
+             set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
+
+// What each gallery tab shows: all, image or video. Disk keeps the key it
+// had before Captures existed.
+const filterKey={disk:'cd-filter',caps:'cd-filter-caps'};
+const filters={};
+for(const t in filterKey){ const v=store.get(filterKey[t]);
+  filters[t]=['all','image','video'].includes(v)?v:'all'; }
+
+const FORMATS=[
+  ['original','Original','as recorded, MJPEG; plays in VLC'],
+  ['mp4','MP4 · H.264','plays anywhere; hardware encoded, fast'],
+  ['mov','MOV · H.264','for iMovie / Final Cut; same as MP4 inside'],
+  ['webm','WebM · VP9','smaller, for the web; about 3x slower'],
+  ['mp3','MP3','sound only'],
+];
+let exportFmt=FORMATS.some(f=>f[0]===store.get('cd-fmt'))?store.get('cd-fmt'):'original';
+
+/* ---------- theme ---------- */
+const savedTheme=store.get('cd-theme');
+if(savedTheme) document.documentElement.dataset.theme=savedTheme;
+document.getElementById('theme').onclick=()=>{
+  const cur=document.documentElement.dataset.theme
+    || (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  const next=cur==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  store.set('cd-theme',next);
+};
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.onclick=()=>{
+    tab=b.dataset.tab; exitSelect();
+    document.querySelectorAll('nav button').forEach(x=>
+      x.setAttribute('aria-selected',String(x===b)));
+    document.getElementById('tab-live').hidden=tab!=='live';
+    document.getElementById('tab-disk').hidden=tab!=='disk';
+    document.getElementById('tab-caps').hidden=tab!=='caps';
+    syncStream();
+  };
+});
+
+/* ---------- live view ---------- */
+function syncStream(){
+  const v=document.getElementById('viewer');
+  const want=(tab==='live'&&state&&state.camera.mode==='live'&&state.live);
+  if(want&&!streaming){
+    v.innerHTML='<img id="liveimg" alt="live view">';
+    const im=document.getElementById('liveimg');
+    im.src='/api/stream?t='+Date.now();
+    im.onerror=()=>{streaming=false;};
+    streaming=true;
+  }else if(!want&&streaming){
+    v.innerHTML='<div class="off"></div>'; streaming=false;
+  }
+  if(!streaming&&tab==='live'){
+    const off=v.querySelector('.off'); if(!off) return;
+    off.innerHTML = !state ? 'connecting...'
+      : state.camera.mode==='storage'
+        ? 'Camera is in STORAGE mode.<br>Everything offloads automatically.<br><br>Switch it to LIVE for the viewfinder.'
+      : state.camera.mode!=='live'
+        ? 'No camera connected.<br><br>Plug it in as <code>live</code><br>to use the viewfinder.'
+      : 'Viewfinder is off.<br>The camera sensor is idle.<br><br>Press <b>Viewfinder</b> to wake it.';
+  }
+}
+
+async function refresh(){
+  try{ state=await (await fetch('/api/state',{cache:'no-store'})).json(); }catch(e){ return; }
+  const c=state.camera,r=state.recstatus||{},s=state.status||{},ctl=state.control||{};
+
+  const cam=document.getElementById('cam');
+  cam.textContent='camera: '+(c.mode==='storage'?'storage':c.mode==='live'?'live':'none');
+  cam.className='pill '+(c.mode==='storage'?'on':c.mode==='live'?'live':'');
+
+  const last=document.getElementById('last');
+  if(r.recording){last.innerHTML='<i class="reclamp"></i>rec '+(r.file||'');last.className='pill rec';}
+  else if(s.state==='copying'){last.textContent='copying '+(s.done||0)+'/'+(s.total||0);last.className='pill live';}
+  else {last.textContent=s.last_result||'idle';last.className='pill';}
+
+  const d=state.disk;
+  document.getElementById('gauge').innerHTML=bar(100-d.pct)+' '+fmt(d.free)+' free';
+  document.getElementById('held').textContent=state.held+' held';
+
+  const isLive=c.mode==='live', on=!!ctl.preview, ready=isLive&&state.live;
+  const vf=document.getElementById('vf');
+  vf.disabled=!isLive;
+  vf.textContent=on?'■ Viewfinder':'▶ Viewfinder';
+  vf.className='btn '+(on?'stop':'');
+  document.getElementById('shoot').disabled=!ready;
+  document.getElementById('rec').disabled=!isLive;
+  const rb=document.getElementById('rec');
+  rb.textContent=r.recording?'■ Stop':'⏺ Record';
+  rb.className='btn '+(r.recording?'stop':'rec');
+  document.getElementById('livehint').textContent =
+    r.recording?'recording to '+(r.file||'')+' — unplugging also stops it cleanly'
+    : ready?'shoot saves the camera’s own frame to Captures, no re-encoding'
+    : isLive?'sensor idle — nothing is being captured'
+    : '';
+
+  document.getElementById('wipe').disabled=(c.mode!=='storage');
+  render(); syncStream();
+}
+
+/* ---------- grids ---------- */
+function cell(i,idx,listName){
+  return '<a class="cell'+(sel.has(i.path)?' sel':'')+'" data-path="'+i.path
+   +'" data-list="'+listName+'" data-idx="'+idx+'">'
+   +'<img loading="lazy" src="/thumb/'+encodeURI(i.path)+'" alt="">'
+   +(selMode?'<span class="tick">✓</span>':'')
+   +'<span class="badge">'+(i.kind==='video'?'▶':'')+fmt(i.size)+'</span></a>';
+}
+
+// Both gallery tabs are day or dump groups of items, drawn the same way.
+const groupsOf=t=>t==='disk'?state.dumps:state.captures;
+const shown=t=>i=>filters[t]==='all'||i.kind===filters[t];
+function flat(t){ return groupsOf(t).flatMap(g=>g.items.filter(shown(t))); }
+
+const EMPTY={
+  disk:'Nothing offloaded yet.<br>Plug the camera in as <code>storage</code>.',
+  caps:'Nothing captured yet.<br>Plug the camera in as <code>live</code>,<br>then Shoot or Record.',
+};
+function renderTab(t){
+  const all=groupsOf(t).flatMap(g=>g.items);
+  const n={all:all.length,image:all.filter(i=>i.kind==='image').length,
+           video:all.filter(i=>i.kind==='video').length};
+  document.querySelectorAll('[data-filter="'+t+'"] button').forEach(b=>{
+    b.setAttribute('aria-pressed',String(b.dataset.f===filters[t]));
+    b.textContent={all:'All',image:'Photos',video:'Videos'}[b.dataset.f]+' '+n[b.dataset.f];
+  });
+  let k=0;
+  const secs=groupsOf(t).map(g=>{
+    const items=g.items.filter(shown(t)); if(!items.length) return '';
+    const cells=items.map(i=>cell(i,k++,t)).join('');
+    return '<section><h2>'+g.label+' <span>'+items.length+' / '
+      +fmt(items.reduce((a,i)=>a+i.size,0))+'</span></h2>'
+      +'<div class="grid">'+cells+'</div></section>';
+  }).join('');
+  document.getElementById(t).innerHTML=secs
+   || '<div class="empty">'+(all.length?'No '+(filters[t]==='image'?'photos':'videos')
+        +' here.':EMPTY[t])+'</div>';
+}
+
+function render(){
+  renderTab('disk'); renderTab('caps');
+  document.querySelectorAll('.cell').forEach(el=>{
+    el.onclick=ev=>{
+      ev.preventDefault();
+      const p=el.dataset.path;
+      if(selMode){
+        sel.has(p)?sel.delete(p):sel.add(p);
+        el.classList.toggle('sel'); updateSelBar(); return;
+      }
+      openLb(flat(el.dataset.list),parseInt(el.dataset.idx,10));
+    };
+  });
+}
+
+document.querySelectorAll('[data-filter] button').forEach(b=>{
+  b.onclick=()=>{
+    const t=b.parentElement.dataset.filter;
+    filters[t]=b.dataset.f; store.set(filterKey[t],filters[t]);
+    // Never download something the filter is hiding.
+    if(selMode===t){ const vis=new Set(flat(t).map(i=>i.path));
+      sel.forEach(p=>{ if(!vis.has(p)) sel.delete(p); }); updateSelBar(); }
+    render();
+  };
+});
+
+/* ---------- selection ---------- */
+document.querySelectorAll('[data-select]').forEach(b=>{
+  b.onclick=()=>{ selMode=b.dataset.select; sel.clear(); render(); updateSelBar(); };
+});
+function exitSelect(){ selMode=null; sel.clear(); updateSelBar(); if(state) render(); }
+const selfmt=document.getElementById('selfmt');
+selfmt.innerHTML=FORMATS.map(f=>'<option value="'+f[0]+'">'+f[1]+'</option>').join('');
+selfmt.value=exportFmt;
+selfmt.onchange=()=>{ exportFmt=selfmt.value; store.set('cd-fmt',exportFmt); updateSelBar(); };
+
+const isVideoPath=p=>[...state.dumps,...state.captures].flatMap(g=>g.items)
+  .some(i=>i.path===p&&i.kind==='video');
+function updateSelBar(){
+  const ab=document.getElementById('actionbar');
+  ab.hidden=!selMode;
+  document.body.classList.toggle('selecting',!!selMode);
+  document.getElementById('selcount').textContent=sel.size+' selected';
+  const hasVideo=!!state&&[...sel].some(isVideoPath);
+  document.getElementById('selfmtwrap').hidden=!hasVideo;
+  const converting=hasVideo&&exportFmt!=='original';
+  const b=document.getElementById('seldl');
+  b.disabled=sel.size===0;
+  b.textContent=sel.size>1?'Download .zip':'Download';
+  if(converting) b.textContent=sel.size>1?'Convert .zip':'Convert';
+}
+document.getElementById('selcancel').onclick=exitSelect;
+document.getElementById('seldl').onclick=()=>{
+  if(!sel.size) return;
+  const paths=[...sel];
+  if(exportFmt!=='original'&&paths.some(isVideoPath)){
+    runExport(paths,exportFmt); exitSelect(); return;
+  }
+  if(paths.length===1){
+    location.href='/media/'+encodeURI(paths[0])+'?dl=1'; exitSelect(); return;
+  }
+  // A real form post, so the browser streams the download itself rather than
+  // buffering the whole zip in phone memory.
+  const f=document.createElement('form');
+  f.method='POST'; f.action='/api/zip'; f.style.display='none';
+  paths.forEach(p=>{ const i=document.createElement('input');
+    i.type='hidden'; i.name='path'; i.value=p; f.appendChild(i); });
+  document.body.appendChild(f); f.submit();
+  setTimeout(()=>{ f.remove(); exitSelect(); },800);
+};
+
+/* ---------- export ---------- */
+// Conversion runs server-side as a job this polls, because a long tape takes
+// minutes and a phone will not hold a silent request open that long.
+async function runExport(paths,format){
+  openDlg('Export · '+FORMATS.find(f=>f[0]===format)[1],true);
+  dlgBody.innerHTML='Starting...';
+  let r;
+  try{
+    r=await (await fetch('/api/export',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({paths,format})})).json();
+  }catch(e){ r={}; }
+  if(!r.id){ dlgBody.innerHTML='<b style="color:var(--red)">Could not start the export.</b>'; return; }
+  let live=true;
+  onDlgClose=()=>{ live=false; fetch('/api/export/'+r.id,{method:'DELETE'}); };
+  const tick=async()=>{
+    if(!live) return;
+    let j;
+    try{ j=await (await fetch('/api/export/'+r.id,{cache:'no-store'})).json(); }
+    catch(e){ return setTimeout(tick,1500); }
+    const failed=j.failed&&j.failed.length?'<p style="color:var(--orange)">Could not convert: '
+      +j.failed.join(', ')+'</p>':'';
+    if(j.state==='running'){
+      dlgBody.innerHTML='<b>Converting '+Math.min(j.done+1,j.total)+' of '+j.total+'</b>'
+        +'<div class="muted" style="margin-top:6px">'+(j.current||'')+'</div>'
+        +'<div class="gauge" style="margin-top:8px">'+bar(j.done/j.total*100)+'</div>'
+        +failed+'<p class="muted">Runs on the Pi, a few times faster than the clips are long. '
+        +'Cancel stops it.</p>';
+      return setTimeout(tick,1000);
+    }
+    if(j.state==='done'){
+      const url='/api/export/'+r.id+'/file';
+      // Done: closing now only dismisses, the file stays briefly for retries.
+      onDlgClose=null;
+      dlgBody.innerHTML='<b style="color:var(--green)">Ready · '+j.name+' · '+fmt(j.size)+'</b>'
+        +failed+'<p class="muted">Download starting. If it does not, '
+        +'<a href="'+url+'" style="color:var(--orange)">tap here</a>.</p>';
+      document.getElementById('cancel').textContent='Close';
+      location.href=url;
+      return;
+    }
+    onDlgClose=null;
+    dlgBody.innerHTML='<b style="color:var(--red)">Export failed.</b>'+failed
+      +(j.error?'<div class="muted">'+j.error+'</div>':'');
+  };
+  tick();
+}
+
+/* ---------- lightbox ---------- */
+const lb=document.getElementById('lb');
+function openLb(list,idx){ lbList=list; lbIdx=idx; lb.hidden=false; showLb(); }
+function closeLb(){ lb.hidden=true; document.getElementById('lbstage').innerHTML=''; }
+function showLb(){
+  const it=lbList[lbIdx]; if(!it) return closeLb();
+  document.getElementById('lbname').textContent=it.name;
+  document.getElementById('lbcount').textContent=(lbIdx+1)+' / '+lbList.length;
+  // Video plays by unwrapping its JPEG frames server-side, so an <img> is the
+  // right element for both cases -- no <video>, no codec support needed.
+  const src=it.kind==='video'?'/api/play/'+encodeURI(it.path)+'?t='+Date.now()
+                             :'/media/'+encodeURI(it.path);
+  document.getElementById('lbstage').innerHTML='<img alt="'+it.name+'" src="'+src+'">';
+  document.getElementById('lbdl').onclick=()=>it.kind==='video'?saveAs(it)
+    :location.href='/media/'+encodeURI(it.path)+'?dl=1';
+  // Sound needs a real <video>, which needs H.264. Offered rather than
+  // automatic, because the first play of a clip has to transcode it.
+  const sb=document.getElementById('lbsound');
+  sb.hidden = it.kind!=='video';
+  sb.textContent = it.proxy ? '♪ Sound' : '♪ Sound…';
+}
+
+document.getElementById('lbsound').onclick=()=>{
+  const it=lbList[lbIdx]; if(!it) return;
+  const stage=document.getElementById('lbstage');
+  stage.innerHTML='<div class="lbnote" id="lbnote">'
+    +(it.proxy?'Loading…'
+      :'Converting for sound…<br>runs about 3x faster than the clip is long,<br>and only happens once per recording.')
+    +'</div>';
+  const v=document.createElement('video');
+  v.controls=true; v.autoplay=true; v.playsInline=true; v.style.display='none';
+  v.src='/api/mp4/'+encodeURI(it.path);
+  v.onloadeddata=()=>{ const n=document.getElementById('lbnote'); if(n) n.remove();
+                       v.style.display='block'; v.play().catch(()=>{}); };
+  v.onerror=()=>{ stage.innerHTML='<div class="lbnote">Could not convert this clip.<br>'
+                  +'Use <b>Save</b> and play it in VLC.</div>'; };
+  stage.appendChild(v);
+}
+// Saving a single video asks which format, with the last choice preselected.
+function saveAs(it){
+  openDlg('Save video',true);
+  dlgBody.innerHTML='<b>'+it.name+'</b><div class="fmtlist">'+FORMATS.map(f=>
+    '<label><input type="radio" name="fmt" value="'+f[0]+'"'+(f[0]===exportFmt?' checked':'')+'>'
+    +'<span>'+f[1]+'<br><small>'+f[2]+'</small></span></label>').join('')+'</div>';
+  confirmBtn.hidden=false; confirmBtn.textContent='Save'; confirmBtn.className='btn small shoot';
+  confirmBtn.onclick=()=>{
+    exportFmt=dlgBody.querySelector('input[name=fmt]:checked').value;
+    store.set('cd-fmt',exportFmt); selfmt.value=exportFmt;
+    confirmBtn.hidden=true;
+    if(exportFmt==='original'){ dlg.close(); location.href='/media/'+encodeURI(it.path)+'?dl=1'; }
+    else runExport([it.path],exportFmt);
+  };
+}
+document.getElementById('lbclose').onclick=closeLb;
+document.getElementById('lbprev').onclick=()=>{ lbIdx=(lbIdx-1+lbList.length)%lbList.length; showLb(); };
+document.getElementById('lbnext').onclick=()=>{ lbIdx=(lbIdx+1)%lbList.length; showLb(); };
+addEventListener('keydown',e=>{
+  if(lb.hidden) return;
+  if(e.key==='Escape') closeLb();
+  if(e.key==='ArrowLeft') document.getElementById('lbprev').click();
+  if(e.key==='ArrowRight') document.getElementById('lbnext').click();
+});
+
+/* ---------- camera control ---------- */
+async function control(body){
+  await fetch('/api/control',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  setTimeout(refresh,400);
+}
+document.getElementById('vf').onclick=()=>control({preview:!(state.control||{}).preview});
+document.getElementById('shoot').onclick=async e=>{
+  const b=e.currentTarget,t=b.textContent;
+  b.disabled=true; b.textContent='✓ Saved';
+  await control({snapshot:true});
+  setTimeout(()=>{b.textContent=t;},900);
+};
+document.getElementById('rec').onclick=()=>control({recording:!(state.recstatus||{}).recording});
+
+/* ---------- dialogs ---------- */
+const dlg=document.getElementById('dlg'),dlgBody=document.getElementById('dlgBody'),
+      dlgHead=document.getElementById('dlghead'),confirmBtn=document.getElementById('confirm');
+document.getElementById('cancel').onclick=()=>dlg.close();
+// Runs once when the dialog closes by any route (button, Esc), then clears.
+let onDlgClose=null;
+dlg.addEventListener('close',()=>{ const f=onDlgClose; onDlgClose=null; if(f) f(); });
+function openDlg(title,calm){
+  onDlgClose=null;
+  dlgHead.textContent=title; dlgHead.className='dlghead'+(calm?' calm':'');
+  confirmBtn.hidden=true; confirmBtn.className='btn small rec';
+  document.getElementById('cancel').textContent='Cancel';
+  if(!dlg.open) dlg.showModal();
+}
+
+document.getElementById('wipe').onclick=async()=>{
+  openDlg('Wipe camera');
+  dlgBody.innerHTML='Checking what is safe to delete...';
+  const r=await (await fetch('/api/wipe',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({commit:false})})).json();
+  let h='';
+  if(r.deleted?.length) h+='<b>'+r.deleted.length+' file(s) verified here</b>'
+    +'<div class="muted" style="margin-top:6px">'+r.deleted.join(', ')+'</div>';
+  if(r.kept?.length) h+='<p style="color:var(--orange)"><b>'+r.kept.length+' KEPT</b> — '
+    +'no verified copy here:<br><span class="muted">'+r.kept.join(', ')+'</span></p>';
+  if(r.errors?.length) h+='<p style="color:var(--red)">'+r.errors.join('<br>')+'</p>';
+  if(!r.deleted?.length){ h+='<p>Nothing can be safely deleted.</p>'; }
+  else{
+    h+='<p class="muted">Erases them from the camera. The copies here are untouched.</p>';
+    confirmBtn.hidden=false; confirmBtn.textContent='Delete';
+    confirmBtn.onclick=async()=>{
+      confirmBtn.disabled=true; dlgBody.innerHTML='Deleting...';
+      const q=await (await fetch('/api/wipe',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({commit:true})})).json();
+      dlgBody.innerHTML=q.ok?'<b style="color:var(--green)">Deleted '+q.deleted.length+' file(s).</b>'
+        :'<b style="color:var(--red)">Finished with problems</b><div class="muted">'
+         +(q.errors||[]).join('<br>')+'</div>';
+      confirmBtn.hidden=true; confirmBtn.disabled=false; refresh();
+    };
+  }
+  dlgBody.innerHTML=h;
+};
+
+refresh(); setInterval(()=>{ if(lb.hidden) refresh(); },3000);
+</script>
+</body>
+</html>
