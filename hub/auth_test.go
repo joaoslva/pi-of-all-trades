@@ -81,6 +81,28 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+func TestLogout(t *testing.T) {
+	f := newFixture(t)
+	c := f.session(t)
+	other := f.session(t)
+	if rec := f.do("POST", "/admin/api/logout", "", map[string]string{"Sec-Fetch-Site": "cross-site"}, c); rec.Code != 403 {
+		t.Fatalf("cross-site logout: %d", rec.Code)
+	}
+	rec := f.do("POST", "/admin/api/logout", "", nil, c)
+	if rec.Code != 204 || len(rec.Result().Cookies()) != 1 || rec.Result().Cookies()[0].MaxAge != -1 {
+		t.Fatalf("logout: %d %v", rec.Code, rec.Result().Cookies())
+	}
+	if rec := f.do("GET", "/admin/api/stats", "", nil, c); rec.Code != 401 {
+		t.Fatalf("stats after logout: %d", rec.Code)
+	}
+	if !f.a.valid(reqWith(other)) {
+		t.Fatal("logout ended another session")
+	}
+	if rec := f.do("POST", "/admin/api/logout", "", nil, nil); rec.Code != 204 {
+		t.Fatalf("logout without a session: %d", rec.Code)
+	}
+}
+
 func TestSixthLoginBlocked(t *testing.T) {
 	f := newFixture(t)
 	for i := 0; i < 5; i++ {

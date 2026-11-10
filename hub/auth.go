@@ -219,6 +219,21 @@ func (a *Auth) login(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// logout ends the caller's session (if any) and clears the cookie.
+func (a *Auth) logout(w http.ResponseWriter, r *http.Request) {
+	if !originOK(r) {
+		http.Error(w, "cross-site request refused", http.StatusForbidden)
+		return
+	}
+	if c, err := r.Cookie(cookieName); err == nil {
+		a.mu.Lock()
+		delete(a.sessions, c.Value)
+		a.mu.Unlock()
+	}
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // issueNonce returns a one-time token that confirms exactly this action for nonceTTL.
 func (a *Auth) issueNonce(action string) string {
 	a.mu.Lock()

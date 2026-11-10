@@ -3,17 +3,57 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pi</title>
+<title>{{with .Hostname}}{{.}}{{else}}Pi{{end}}</title>
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 0 auto; padding: 16px; }
-  a.svc { display: block; padding: 16px; margin: 12px 0; border: 1px solid; border-radius: 8px; text-decoration: none; color: inherit; }
-  a.svc strong { display: block; font-size: 1.25rem; }
-  a.svc span { opacity: .7; }
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px 0; }
+  .host { margin: 0; font-size: .8rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .lock { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: var(--accent-ink);
+    background: var(--card-hi); box-shadow: inset 0 1px 0 var(--edge), 0 2px 6px rgb(var(--shadow) / .14); }
+  .lock:hover { color: var(--text); }
+  main { flex: 1; width: 100%; max-width: 30rem; margin: 0 auto; padding: 6vh 20px 32px; }
+  h1 { margin: 0 0 26px; font-size: 1.9rem; font-weight: 650; letter-spacing: -.01em; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+  .svc { display: flex; align-items: center; gap: 16px; padding: 20px 18px; border-radius: 20px;
+    color: var(--text); text-decoration: none;
+    background: linear-gradient(180deg, var(--card-hi), var(--card));
+    box-shadow: inset 0 1px 0 var(--edge), 0 1px 2px rgb(var(--shadow) / .10),
+      0 6px 14px rgb(var(--shadow) / .10), 0 18px 32px -12px rgb(var(--shadow) / .24);
+    transform: perspective(700px) rotateX(2deg);
+    transition: transform .18s ease, box-shadow .18s ease; }
+  .svc:hover, .svc:focus-visible { transform: perspective(700px) rotateX(2deg) translateY(-3px);
+    box-shadow: inset 0 1px 0 var(--edge), 0 2px 4px rgb(var(--shadow) / .10),
+      0 12px 22px rgb(var(--shadow) / .13), 0 28px 44px -14px rgb(var(--shadow) / .30); }
+  .svc:active { transform: perspective(700px) rotateX(0) translateY(1px);
+    box-shadow: inset 0 1px 0 var(--edge), 0 1px 2px rgb(var(--shadow) / .14), 0 3px 8px rgb(var(--shadow) / .10); }
+  .badge { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; flex: none;
+    background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 1.2rem;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), 0 2px 4px rgb(var(--shadow) / .18); }
+  .svc span:not(.badge) { flex: 1; min-width: 0; }
+  .svc strong { display: block; font-size: 1.2rem; }
+  .svc small { display: block; color: var(--muted); font-size: .92rem; }
+  .svc svg.i { color: var(--muted); }
+  .empty { margin: 0; padding: 22px; border-radius: 20px; background: var(--card); color: var(--muted); border: 1px dashed var(--field); }
+  .empty strong { display: block; color: var(--text); margin-bottom: 4px; }
+  footer { padding: 0 0 16px; color: var(--line); }
+  footer svg { width: min(520px, 92vw); height: auto; display: block; margin: 0 auto; }
+  @media (prefers-reduced-motion: reduce) {
+    .svc, .svc:hover, .svc:focus-visible, .svc:active { transition: none; transform: none; }
+  }
 </style>
 </head>
 <body>
-<h1>Services</h1>
-{{range .}}<a class="svc" href="{{.Href}}"><strong>{{.Name}}</strong><span>{{.Description}}</span></a>
-{{end}}</body>
+<header>
+  <p class="host">{{.Hostname}}</p>
+  <a class="lock" href="/admin" aria-label="Admin" title="Admin"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></a>
+</header>
+<main>
+  <h1>Services</h1>
+  {{with .Services}}<ul>
+  {{range .}}<li><a class="svc" href="{{.Href}}"><span class="badge" aria-hidden="true">{{.Initial}}</span><span><strong>{{.Name}}</strong><small>{{.Description}}</small></span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a></li>
+  {{end}}</ul>{{else}}<p class="empty"><strong>No services yet</strong>Add one in /etc/pihub/services.d on the Pi; see docs/adding-a-service.md.</p>{{end}}
+</main>
+<footer aria-hidden="true"><svg viewBox="0 0 520 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M0 62 L48 50 L84 54 L130 40 L170 46 L208 30 Q216 8 238 6 Q256 6 260 22 L262 44 L300 40 L336 52 L380 38 L420 48 L468 42 L520 56"/><path d="M262 44 L280 36 L318 46" opacity=".6"/></svg></footer>
+</body>
 </html>

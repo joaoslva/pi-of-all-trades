@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-//go:embed web/index.html
+//go:embed web/index.html web/theme.css
 var webFS embed.FS
 
 //go:embed web/admin.html
@@ -31,15 +31,19 @@ var indexTmpl = template.Must(template.ParseFS(webFS, "web/index.html"))
 
 type linkView struct {
 	Service
-	Href template.URL
+	Href    template.URL
+	Initial string // first letter of the name, for the button badge
 }
 
 // newHandler serves the landing page. Buttons are plain redirects to each
 // service's own port on whatever host the browser used to reach us.
 func newHandler(services []Service, auth *Auth, ctl *Control, wifi *Wifi) http.Handler {
 	mux := http.NewServeMux()
+	hostname, _ := os.Hostname()
+	mux.HandleFunc("GET /theme.css", func(w http.ResponseWriter, r *http.Request) { http.ServeFileFS(w, r, webFS, "web/theme.css") })
 	mux.HandleFunc("GET /admin", auth.adminPage)
 	mux.HandleFunc("POST /admin/api/login", auth.login)
+	mux.HandleFunc("POST /admin/api/logout", auth.logout)
 	mux.HandleFunc("GET /admin/api/stats", auth.require(auth.stats))
 	mux.HandleFunc("POST /admin/api/power", auth.require(auth.power))
 	if ctl != nil {
@@ -61,11 +65,14 @@ func newHandler(services []Service, auth *Auth, ctl *Control, wifi *Wifi) http.H
 		var views []linkView
 		for _, s := range services {
 			if s.Listed() {
-				views = append(views, linkView{s, template.URL("http://" + net.JoinHostPort(host, strconv.Itoa(s.Port)) + "/")})
+				views = append(views, linkView{s, template.URL("http://" + net.JoinHostPort(host, strconv.Itoa(s.Port)) + "/"), string([]rune(s.Name)[:1])})
 			}
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := indexTmpl.Execute(w, views); err != nil {
+		if err := indexTmpl.Execute(w, struct {
+			Hostname string
+			Services []linkView
+		}{hostname, views}); err != nil {
 			log.Print(err)
 		}
 	})
