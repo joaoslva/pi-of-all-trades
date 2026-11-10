@@ -1,0 +1,8 @@
+{
+  "id": "camera",
+  "name": "Camera",
+  "description": "Aiptek camera: live view, captures, offload",
+  "class": "exclusive",
+  "units": ["camera-drive-web", "camera-live"],
+  "port": 8081
+}

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 0 auto; padding: 16px; }
+  a.svc { display: block; padding: 16px; margin: 12px 0; border: 1px solid; border-radius: 8px; text-decoration: none; color: inherit; }
+  a.svc strong { display: block; font-size: 1.25rem; }
+  a.svc span { opacity: .7; }
+</style>
+</head>
+<body>
+<h1>Services</h1>
+{{range .}}<a class="svc" href="{{.Href}}"><strong>{{.Name}}</strong><span>{{.Description}}</span></a>
+{{end}}</body>
+</html>

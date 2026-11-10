@@ -1,6 +1,7 @@
 [Unit]
 Description=camera-drive live view and camcorder (Aiptek live mode)
 After=local-fs.target sound.target
+PartOf=camera-drive-web.service
 
 [Service]
 Type=simple
