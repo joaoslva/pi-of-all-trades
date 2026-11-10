@@ -148,6 +148,7 @@ H3=http://127.0.0.1:18081
 PW3="verify3-$RANDOM$RANDOM$RANDOM"
 T="$(pi mktemp -d)"
 live_before="$(pi 'systemctl is-active camera-live')"
+starts_before="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
 cam_before="$(pi 'systemctl is-active camera-drive-web')"
 echo "INFO  before: camera-drive-web=$cam_before camera-live=$live_before"
 api() { pi "curl -s -m 60 -b $T/jar -c $T/jar $1"; }
@@ -259,12 +260,14 @@ if grep -q '08ca:2023' <<<"$usb"; then
   [ "$n" = 1 ] && report "camera plugged in (storage) starts camera-offload@ once" 0 || report "camera plugged in (storage) starts camera-offload@ once" 1 "started $n times"
 elif grep -q '08ca:2022' <<<"$usb"; then
   n="$(pi 'journalctl -b -u camera-live --no-pager | grep -c "Started camera-live"')"
-  # One start per plug-in (kernel log), plus the one H3's own Camera-on switch made.
+  # Earlier runs this boot (and plug-ins) also start camera-live, so count only what changed during H3:
+  # its Camera-on switch must have added exactly one start, and camera-live must be active.
   plugs="$(pi 'journalctl -b -k --no-pager | grep -c "idVendor=08ca, idProduct=2022"')"
-  if [ "$n" = "$((plugs + h3_live_starts))" ] && pi 'systemctl -q is-active camera-live'; then
-    report "camera plugged in (live) has camera-live active, started once per plug-in" 0 "$n starts, $plugs plug-in(s), $h3_live_starts from H3"
+  echo "INFO  camera-live starts this boot: $n (before H3: $starts_before, plug-ins: $plugs)"
+  if [ "$n" = "$((starts_before + h3_live_starts))" ] && pi 'systemctl -q is-active camera-live'; then
+    report "camera in live mode: camera-live active, H3 added exactly its own start" 0
   else
-    report "camera plugged in (live) has camera-live active, started once per plug-in" 1 "$n starts, $plugs plug-in(s), $h3_live_starts from H3"
+    report "camera in live mode: camera-live active, H3 added exactly its own start" 1 "$n starts, $starts_before before H3, $h3_live_starts expected from H3"
   fi
 else
   [ "$had_camera" = 1 ] && report "camera came back after reboot" 1 "08ca:202x gone" ||
