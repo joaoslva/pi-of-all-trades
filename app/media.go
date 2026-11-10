@@ -26,7 +26,7 @@ const thumbPx = 320
 
 func init() {
 	// Only where the system table lacks them, so the types match what Python's mimetypes gave on the same box.
-	for ext, typ := range map[string]string{".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
+	for ext, typ := range map[string]string{".mkv": "video/matroska", ".avi": "video/x-msvideo",
 		".mov": "video/quicktime", ".mp4": "video/mp4"} {
 		if mime.TypeByExtension(ext) == "" {
 			mime.AddExtensionType(ext, typ)
