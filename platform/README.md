@@ -75,3 +75,8 @@ From the first bring-up of camera-drive, kept because they still work:
   (see "cloud-init's NoCloud datasource" in `docs/camera-drive.md`).
 - `setup-ap.sh` — creates the `camera-drive-ap` hotspot profile that
   `camera-net-fallback` switches to.
+
+`camera-net-fallback` (timer, every 30 s) is the only thing that raises the
+hotspot. It stands down while `/run/pihub/wifi-switching` is under 90 s old
+(the hub writes it during an admin-page Wi-Fi switch). Rules and the manual
+hotspot test: `docs/network.md`.
