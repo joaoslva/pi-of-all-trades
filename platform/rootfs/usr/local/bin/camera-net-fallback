@@ -27,10 +27,18 @@ LOG=/srv/camera-drive/net.log
 # radio that runs the AP briefly disturbs phones connected to it.
 AP_SCAN_EVERY=120
 SCAN_STAMP=/run/camera-net-fallback.scan
+# Written by pihub while the admin page switches Wi-Fi networks. A flag older than
+# this is stale (the hub died mid-switch) and ignored, so it can never disable the fallback.
+SWITCH_FLAG="${SWITCH_FLAG:-/run/pihub/wifi-switching}"
+SWITCH_FLAG_MAX=90
 
 log() { echo "$(date -Is) $*" >> "$LOG" 2>/dev/null; }
 
 command -v nmcli >/dev/null || exit 0
+
+# The hub is switching networks and has its own revert armed: do not fight it.
+flag_mtime="$(stat -c %Y "$SWITCH_FLAG" 2>/dev/null)" &&
+  [ $(( $(date +%s) - flag_mtime )) -lt "$SWITCH_FLAG_MAX" ] && exit 0
 
 # NetworkManager's numeric device state: 20 unavailable, 30 disconnected,
 # 40-90 connecting, 100 connected.

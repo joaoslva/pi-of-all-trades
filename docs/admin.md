@@ -15,3 +15,7 @@ Sessions live in memory: a hub restart logs everyone out. They expire after 30 i
 ## Services
 
 The Services section lists every service with its class, units and memory (`n/a` when the kernel has cgroup memory accounting off, as on this Pi). Exclusive services have a switch button: the dialog names what will stop and what will start, and a one-time nonce (bound to that exact action) confirms it. Background services are read-only. A banner shows overload warnings; it never blocks anything. See `docs/adding-a-service.md`.
+
+## Wi-Fi
+
+The Wi-Fi section shows the mode (hotspot or client), the SSID and the address, lists saved networks (Connect, Forget), nearby networks (Scan, client mode only), and an add form. Switching networks arms a revert first; press **Keep this network** at the new address or the Pi goes back to the previous one after `--wifi-revert` seconds (default 30). The hotspot is raised only by the fallback timer, which the page shows read-only and never controls. Details, values and the manual hotspot test: `docs/network.md`.

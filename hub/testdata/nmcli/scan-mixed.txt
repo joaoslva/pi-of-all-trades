@@ -1,0 +1,5 @@
+ :71:WPA2:Cafe\: Free
+ :55::OpenNet
+ :40:WPA2:HomeNet
+ :30:WPA2:
+*:89:WPA1 WPA2:HomeNet

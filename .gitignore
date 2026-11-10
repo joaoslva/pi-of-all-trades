@@ -13,3 +13,7 @@ __pycache__/
 .claude/
 hub/rootfs/usr/local/bin/pihub
 app/rootfs/usr/local/bin/camera-drive
+
+# go build output
+/hub/pihub
+/app/camera-drive

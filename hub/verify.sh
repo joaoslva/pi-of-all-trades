@@ -83,10 +83,15 @@ fi
 
 # --- H2: admin login, stats, power. The throwaway password's hash is removed on exit.
 HASH=/etc/pihub/admin.hash
-JAR="$(mktemp)"; ours_hash=1; T=""; live_before=""; h3_live_starts=0
+JAR="$(mktemp)"; ours_hash=1; T=""; T4=""; H4_TEST_CON=""; live_before=""; h3_live_starts=0
 cleanup() {
   rm -f "$JAR"
   [ "$ours_hash" = 1 ] && pi "sudo -n rm -f $HASH" 2>/dev/null # only a hash this run created
+  if [ -n "$T4" ]; then # H4: undo anything a failed check left behind
+    pi "kill \$(cat $T4/pid) 2>/dev/null; sudo -n systemctl stop pihub-wifi-revert.timer pihub-verify-safety.timer 2>/dev/null
+        rm -f /run/pihub/wifi-switching; nmcli -t -f NAME connection show | grep -qxF '$H4_TEST_CON' && [ -n '$H4_TEST_CON' ] && nmcli connection delete id '$H4_TEST_CON'
+        rm -rf $T4" 2>/dev/null
+  fi
   [ -n "$T" ] || return 0
   pi "sudo -n systemctl stop pihub-verify-stray 2>/dev/null; sudo -n systemctl reset-failed pihub-verify-stray 2>/dev/null
       kill \$(cat $T/pid) 2>/dev/null; rm -rf $T
@@ -220,8 +225,122 @@ else
   [ -n "$rss" ] && [ "$rss" -lt 23000 ] && report "pihub under 23000 kB after H3" 0 "$rss kB" || report "pihub under 23000 kB after H3" 1 "${rss:-?} kB"
 fi
 # Leave the Pi as found: camera-live was only started by the switch, not by a camera in live mode.
-[ "$live_before" = active ] || pi 'sudo -n systemctl stop camera-live'
+[ "$live_before" = active ] || pi 'sudo -n systemctl stop camera-live; sudo -n systemctl reset-failed camera-live' # no camera: the start leaves it failed
 echo "INFO  after: camera-drive-web=$(pi 'systemctl is-active camera-drive-web') camera-live=$(pi 'systemctl is-active camera-live')"
+
+
+# --- H4: Wi-Fi profiles. A throwaway hub on a high port (own hash and state dir) drives the
+# real NetworkManager through polkit as joao. Anything that can cost the Pi its network is
+# behind an independent 300 s revert (pihub-verify-safety) that is cancelled at the end.
+echo "== H4 Wi-Fi"
+H4=http://127.0.0.1:18082
+PW4="verify4-$RANDOM$RANDOM$RANDOM"
+T4="$(pi mktemp -d)"
+api4() { pi "curl -s -m 60 -b $T4/jar -c $T4/jar $1"; }
+nonce4() { api4 "-d '$2' $H4/admin/api/wifi/$1" | sed -n 's/.*"nonce":"\([0-9a-f]*\)".*/\1/p'; }
+step4() { # step4 <op> <json-without-nonce> -> "<http code> <body>" of the confirmed call
+  local n; n="$(nonce4 "$1" "$2")"
+  api4 "-w ' %{http_code}' -d '${2%\}},\"nonce\":\"$n\"}' $H4/admin/api/wifi/$1"
+}
+echo "$PW4" | ssh "${SSH_OPTS[@]}" "$PI" "sudo -n /usr/local/bin/pihub passwd --file $T4/admin.hash" 2>&1 | grep -v '^$'
+pi "setsid nohup /usr/local/bin/pihub --listen 127.0.0.1:18082 --hash-file $T4/admin.hash --state-dir $T4 --services-dir /etc/pihub/services.d >$T4/log 2>&1 </dev/null & echo \$! >$T4/pid"
+wait_for 10 pi "curl -s -o /dev/null -m 2 $H4/"
+if [ "$(pi "curl -s -o /dev/null -m 5 -c $T4/jar --data-urlencode password=$PW4 -w '%{http_code}' $H4/admin/api/login")" != 204 ]; then
+  report "H4 throwaway hub starts and logs in" 1 "$(pi "tail -3 $T4/log")"
+else
+  # (e) the fallback timer is outside the hub and running
+  t="$(pi 'systemctl is-active camera-net-fallback.timer; systemctl is-enabled camera-net-fallback.timer' | tr '\n' ' ')"
+  [ "$t" = "active enabled " ] && report "fallback timer is active and enabled" 0 || report "fallback timer is active and enabled" 1 "$t"
+
+  # (b) real nmcli output through the parsers
+  w="$(api4 "$H4/admin/api/wifi")"; echo "INFO  wifi status: $w"
+  SSID="$(py "$w" "print(d['ssid'])")"
+  if py "$w" "sys.exit(0 if d['mode']=='client' and d['active']=='camera-drive-wifi' and d['ip']=='$HOST' and d['fallback_timer']=='active' and {s['name'] for s in d['saved']}>={'camera-drive-wifi','camera-drive-ap'} and [s for s in d['saved'] if s['name']=='camera-drive-ap'][0]['hotspot'] and not [s for s in d['saved'] if s['name']=='camera-drive-wifi'][0]['hotspot'] else 1)"; then
+    report "status: client mode, our SSID and IP, saved list marks the hotspot profile" 0
+  else report "status: client mode, our SSID and IP, saved list marks the hotspot profile" 1; fi
+  sc="$(api4 "$H4/admin/api/wifi/scan")"
+  py "$sc" "sys.exit(0 if any(n['ssid']=='$SSID' and n['in_use'] for n in d['networks']) else 1)" &&
+    report "scan in client mode lists the network we are on" 0 || report "scan in client mode lists the network we are on" 1 "$sc"
+  for body in '{"name":"camera-drive-wifi"}' '{"name":"camera-drive-ap"}'; do
+    c="$(api4 "-o /dev/null -w '%{http_code}' -d '$body' $H4/admin/api/wifi/forget")"
+    [ "$c" = 400 ] && report "forget refused for $body" 0 || report "forget refused for $body" 1 "got $c"
+  done
+  c="$(api4 "-o /dev/null -w '%{http_code}' -d '{}' $H4/admin/api/fallback")"
+  [ "$c" = 404 ] || [ "$c" = 405 ] && report "no hub route for the fallback ($c)" 0 || report "no hub route for the fallback" 1 "got $c"
+  (cd "$REPO/hub" && go test -count=1 -run 'TestNoRouteTouchesFallback' ./... >/dev/null) && report "route table test: nothing touches camera-net-fallback" 0 || report "route table test: nothing touches camera-net-fallback" 1
+
+  # (c) the fallback script stands down for a fresh flag and ignores a stale one (fake nmcli logs calls; real NM untouched)
+  ssh "${SSH_OPTS[@]}" "$PI" "mkdir $T4/fake && cat >$T4/fake/nmcli" <<'SH'
+#!/bin/sh
+echo "$*" >> "$FAKE_LOG"
+case "$*" in
+  *GENERAL.STATE*) echo "100 (connected)" ;;
+  *"connection show --active"*) echo "camera-drive-wifi:wlan0" ;;
+  *"connection show"*) echo "camera-drive-wifi:802-11-wireless" ;;
+esac
+SH
+  runfb() { pi "chmod +x $T4/fake/nmcli; rm -f $T4/calls; touch $T4/calls; $2; PATH=$T4/fake:\$PATH FAKE_LOG=$T4/calls SWITCH_FLAG=$T4/flag /usr/local/bin/camera-net-fallback; wc -l <$T4/calls"; }
+  fresh="$(runfb x 'touch '$T4'/flag')"; stale="$(runfb x 'touch -d "2 minutes ago" '$T4'/flag')"; none="$(runfb x 'rm -f '$T4'/flag')"
+  echo "INFO  fake nmcli calls: fresh flag $fresh, stale flag $stale, no flag $none"
+  [ "$fresh" = 0 ] && report "fallback does nothing while the flag is fresh" 0 || report "fallback does nothing while the flag is fresh" 1 "$fresh calls"
+  [ "$stale" -gt 0 ] && [ "$none" -gt 0 ] && report "fallback runs as before with a stale flag or none" 0 "$stale and $none calls" || report "fallback runs as before with a stale flag or none" 1 "$stale / $none"
+
+  # (d) kill -9 pihub with a flag present: the fallback timer is untouched, the hub returns
+  pi 'touch /run/pihub/wifi-switching; sudo -n kill -9 $(systemctl show -p MainPID --value pihub); sleep 4; tm=$(systemctl is-active camera-net-fallback.timer); hub=$(systemctl is-active pihub); rm -f /run/pihub/wifi-switching; echo $tm $hub' | grep -qx 'active active' &&
+    report "kill -9 pihub with a flag present: fallback timer still active, hub back" 0 || report "kill -9 pihub with a flag present: fallback timer still active, hub back" 1
+
+  # (a) wrong password for our own SSID: the Pi must come back by itself
+  H4_TEST_CON="$SSID"
+  if pi "nmcli -t -f NAME connection show | grep -qxF '$SSID'"; then
+    H4_TEST_CON=""; report "wrong-password revert" skip "a profile named $SSID already exists"
+  else
+    pi 'sudo -n systemd-run --quiet --unit=pihub-verify-safety --on-active=300 nmcli connection up id camera-drive-wifi' &&
+      echo "INFO  independent 300 s safety revert armed"
+    r="$(step4 add "{\"ssid\":\"$SSID\",\"password\":\"wrong-pass-$RANDOM\"}")"
+    case "$r" in *" 204") report "add a profile for our SSID with a wrong password" 0 ;; *) report "add a profile for our SSID with a wrong password" 1 "$r" ;; esac
+    nonce="$(nonce4 connect "{\"name\":\"$SSID\"}")"
+    ssh "${SSH_OPTS[@]}" "$PI" "cat >$T4/rec.sh; chmod +x $T4/rec.sh" <<SH
+#!/bin/sh
+cd $T4
+date +%s.%N > t0
+( echo "\$(curl -s -m 90 -b jar -w ' %{http_code}' -d '{"name":"$SSID","nonce":"$nonce"}' $H4/admin/api/wifi/connect)" > connect.out; date +%s.%N > t_connect_returned ) &
+sleep 0.3
+i=0; : > active.log
+while [ \$i -lt 170 ]; do
+  a=\$(nmcli -t -f NAME,DEVICE connection show --active | sed -n 's/:wlan0\$//p')
+  echo "\$(date +%s.%N) \$a" >> active.log
+  if [ "\$a" = camera-drive-wifi ] && [ \$i -gt 3 ] && [ ! -e /run/pihub/wifi-switching ] && ! systemctl -q is-active pihub-wifi-revert.service; then date +%s.%N > t1; break; fi
+  i=\$((i+1)); sleep 1
+done
+echo done > finished
+SH
+    pi "setsid nohup $T4/rec.sh >/dev/null 2>&1 </dev/null &"
+    t_start=$(date +%s)
+    sleep 5
+    echo "INFO  Pi may be unreachable now; waiting for it (no retry loop beyond the armed revert)"
+    back() { pi "test -e $T4/finished" 2>/dev/null; }
+    while ! back && [ $(( $(date +%s) - t_start )) -lt 330 ]; do sleep 3; done # bounded by the armed 300 s revert
+    secs="$(pi "awk 'NR==FNR{a=\$1;next}{printf \"%.1f\", \$1-a}' $T4/t0 $T4/t1 2>/dev/null")"
+    ssh_back=$(( $(date +%s) - t_start ))
+    echo "INFO  connect returned: $(pi "cat $T4/connect.out | cut -c1-200")"
+    echo "INFO  measured: connect call to Pi back on camera-drive-wifi = ${secs:-?} s; laptop saw ssh answer ${ssh_back} s after the connect call"
+    [ -n "$secs" ] && [ "${secs%.*}" -le 45 ] && report "wrong password: back on camera-drive-wifi within revert (30 s) plus margin" 0 "$secs s" ||
+      report "wrong password: back on camera-drive-wifi within revert (30 s) plus margin" 1 "${secs:-never} s"
+    [ "$(pi "nmcli -t -f NAME connection show --active | grep -c '^camera-drive-wifi$'; ls /run/pihub/wifi-switching 2>&1 | grep -c 'No such'")" = "$(printf '1\n1')" ] &&
+      report "after the revert: camera-drive-wifi active, flag removed" 0 || report "after the revert: camera-drive-wifi active, flag removed" 1
+    seen="$(pi "awk '{print \$2}' $T4/active.log | sort | uniq -c | tr '\n' ' '")"
+    echo "INFO  seconds without camera-drive-wifi on wlan0 during the switch (1 s samples): $(pi "awk '\$2!=\"camera-drive-wifi\"' $T4/active.log | wc -l"); first sample back on it after leaving: $(pi "awk 'NR==FNR{a=\$1;next} \$2!=\"camera-drive-wifi\"{off=\$1} off&&\$2==\"camera-drive-wifi\"{printf \"%.1f s after the connect call\", \$1-a; exit}' $T4/t0 $T4/active.log")"
+    echo "INFO  active connection seen each second during the switch: $seen"
+    [ -n "$seen" ] && ! grep -q 'camera-drive-ap' <<<"$seen" && report "hotspot never raised while the switch was in flight" 0 "$seen" || report "hotspot never raised while the switch was in flight" 1 "${seen:-no samples}"
+    f="$(step4 forget "{\"name\":\"$SSID\"}")"
+    case "$f" in *" 204") report "forget the test profile through the API" 0; H4_TEST_CON="" ;; *) report "forget the test profile through the API" 1 "$f" ;; esac
+    pi 'sudo -n systemctl stop pihub-verify-safety.timer 2>/dev/null; systemctl is-active pihub-verify-safety.timer' | grep -qx inactive && echo "INFO  safety revert cancelled"
+  fi
+  rss="$(pi "awk '/VmRSS/{print \$2}' /proc/\$(cat $T4/pid)/status")"
+  echo "INFO  throwaway hub VmRSS after H4 checks: ${rss:-?} kB"
+  [ -n "$rss" ] && [ "$rss" -lt 23000 ] && report "pihub under 23000 kB after H4" 0 "$rss kB" || report "pihub under 23000 kB after H4" 1 "${rss:-?} kB"
+fi
+echo "INFO  after H4: active=$(pi "nmcli -t -f NAME connection show --active | head -1") profiles=$(pi "nmcli -t -f NAME connection show | tr '\n' ' '") timer=$(pi 'systemctl is-active camera-net-fallback.timer')"
 
 if [ "${PIHUB_TEST_POWER:-}" = 1 ] && [ -z "${NO_REBOOT:-}" ]; then
 # Never reboot in the middle of an offload.
