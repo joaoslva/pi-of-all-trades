@@ -15,6 +15,7 @@ Branches in order are H1, H2, H3, H4 (hub) and C1, C2, C3, C4 (camera).
 - Gated branches (H1, H2, H3, H4, C4) change what the operator sees. The root posts a screenshot in chat and waits for the operator's word before the merge.
 - Real-Pi checks take a lock (`flock /run/pihub-verify.lock`) so two never run at once. Run `platform/deploy.sh --check` before and after each deploy. Any Wi-Fi check arms a revert first with `systemd-run --on-active=300`, as `docs/history.md` says.
 - Camera checks need the camera plugged in. If it is not, the check is reported as skipped, never as passed.
+- Each `verify.sh` deploys only its own component (`hub` for H, `app` for C), so the two lanes do not overwrite each other on the Pi. Tests never write to the real `/srv/camera-drive` or touch the camera's partition. Reboot and power checks are off unless the operator sets `PIHUB_TEST_POWER=1`.
 - Memory check. Each branch records one number, the resident memory in kB of the process it changes, read from `/proc/<pid>/status` on the Pi.
 
 ## H1. Hub skeleton, camera moves to port 8081
@@ -111,7 +112,7 @@ Build.
 
 Checks.
 - Unit over temp directories. Second offload skips everything. A corrupted destination is removed and counted failed. A file not in the index is kept by wipe. The wipe JSON equals a literal string.
-- Differential `verify.sh`. Offload a loop-mounted FAT image with the Python tool at trunk and the Go tool at head into separate directories. The `index.json` files and copied trees must be identical. Wipe dry run and commit output must match the Python JSON. Two offloads at once, the second exits 0. Kill mid-run, re-run, and the mount is released. With the real camera, offload then wipe removes only verified files.
+- Differential `verify.sh`. Offload a loop-mounted FAT image with the Python tool at trunk and the Go tool at head into separate directories. The `index.json` files and copied trees must be identical. Wipe dry run and commit output must match the Python JSON. Two offloads at once, the second exits 0. Kill mid-run, re-run, and the mount is released. Wipe never runs against the real camera in any check. The operator tests that himself.
 - Memory and time. Go offload of a 500 MB image is no slower than 110 percent of Python and no heavier.
 
 ## C2. camera-live in Go
@@ -177,6 +178,8 @@ Checks.
 - No dependencies beyond the Go standard library. Service files are JSON because the standard library has no TOML. The password hash is `crypto/pbkdf2`.
 - ffmpeg and other binaries on the Pi are fine. The goal is no Python runtime for our code.
 - The hotspot fallback stays a separate timer outside the hub. The hub manages Wi-Fi profiles only and cannot stop the fallback. Only two modes are supported, Pi hotspot with no internet relay and Pi client on a LAN.
+
+- Protecting a service with a password (a host-scoped signed cookie issued by the hub and checked by Go services, toggled per service in the admin page) is benched as H5. The one-at-a-time switch already hides the camera while the game runs. Revisit after C3 if it is still wanted.
 
 ## Rejected
 
