@@ -130,6 +130,7 @@ type Game struct {
 	deadline  time.Time
 	downSince time.Time
 	finished  *HistoryEntry
+	endedBy   string // who ended the last game early; shown in the lobby until the lobby changes
 }
 
 func NewGame(chars []Character, rng *rand.Rand) *Game {
@@ -281,6 +282,14 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 		return errUnknown
 	}
 	g.Tick(now)
+	err := g.act(p, a, now)
+	if err == nil && a.Type != "end_game" {
+		g.endedBy = ""
+	}
+	return err
+}
+
+func (g *Game) act(p *Player, a Action, now time.Time) error {
 	switch a.Type {
 	case "set_options":
 		if g.phase != Lobby {
@@ -332,6 +341,12 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 			return errPhase
 		}
 		g.reset()
+	case "end_game":
+		// a second tap lands in the lobby: ignore it rather than 409
+		if g.phase == Drawing || g.phase == Playing || g.phase == RoundEnd {
+			g.reset()
+			g.endedBy = p.Name
+		}
 	case "leave":
 		g.remove(p)
 		if g.phase != Lobby || len(g.players) == 0 {
@@ -478,6 +493,7 @@ func (g *Game) reset() {
 	g.drawn = nil
 	g.deadline = time.Time{}
 	g.finished = nil
+	g.endedBy = ""
 	for _, p := range g.players {
 		*p = Player{Token: p.Token, Name: p.Name, Connected: p.Connected}
 	}

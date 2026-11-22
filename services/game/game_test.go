@@ -533,8 +533,8 @@ func TestSetOptions(t *testing.T) {
 		t.Fatalf("subset or repeat: %+v want %+v", g.opts, want)
 	}
 	set(Action{Pool: ptr("riders")})
-	if g.opts.Rounds != 2 {
-		t.Errorf("riders pool did not clamp rounds: %+v", g.opts)
+	if g.opts.Rounds != 2 || g.View(a, t0).Options.MaxRounds != 2 {
+		t.Errorf("riders pool did not clamp rounds: %+v", g.View(a, t0).Options)
 	}
 	set(Action{Pool: ptr("dragons")})
 	if want := (Options{2, 300, false, "dragons"}); g.opts != want {
@@ -666,5 +666,79 @@ func TestOptionsPersistAndReset(t *testing.T) {
 	g.SetConnected(b, false, t0)
 	if !g.Tick(t0.Add(ReapAfter)) || len(g.players) != 0 || g.opts != defaultOptions() {
 		t.Errorf("reap kept options: %+v", g.opts)
+	}
+}
+
+func TestEndGame(t *testing.T) {
+	enter := map[Phase]func(g *Game, a, b string){
+		Drawing: func(g *Game, a, b string) { act(t, g, a, "draw", t0) },
+		Playing: func(g *Game, a, b string) {
+			act(t, g, a, "draw", t0)
+			act(t, g, b, "draw", t0)
+			act(t, g, a, gotIt, t0)
+		},
+		RoundEnd: func(g *Game, a, b string) {
+			act(t, g, a, "draw", t0)
+			act(t, g, b, "draw", t0)
+			act(t, g, a, gotIt, t0)
+			act(t, g, b, forfeit, t0)
+		},
+	}
+	for phase, to := range enter {
+		// six characters, two drawn: the next two-round game must take exactly the other four
+		g, a, b := twoPlayers(t, pool(6, false), 1)
+		opts := Options{2, 120, false, "all"}
+		if err := g.Act(a, Action{Type: "set_options", Rounds: ptr(2), Seconds: ptr(120), Hints: ptr(false)}, t0); err != nil {
+			t.Fatal(err)
+		}
+		act(t, g, a, "start", t0)
+		first := slices.Clone(g.drawn)
+		to(g, a, b)
+		if g.phase != phase {
+			t.Fatalf("setup reached %s, want %s", g.phase, phase)
+		}
+		act(t, g, b, "end_game", t0)
+		for _, tok := range []string{a, b} {
+			v := g.View(tok, t0)
+			if v.Phase != Lobby || v.You.Score != 0 || v.Other.Score != 0 || v.Round != 0 || v.Options.Options != opts || v.EndedBy != "B" {
+				t.Fatalf("%s: after end_game %+v", phase, v)
+			}
+		}
+		if g.TakeFinished() != nil {
+			t.Fatalf("%s: an ended game went to history", phase)
+		}
+		act(t, g, a, "end_game", t0)
+		act(t, g, b, "end_game", t0)
+		if g.View(a, t0).EndedBy != "B" {
+			t.Fatalf("%s: end_game in the lobby changed endedBy", phase)
+		}
+		for _, id := range playGame(t, g, a, b, 2) {
+			if slices.Contains(first, id) {
+				t.Fatalf("%s: next game repeats %s from the ended game", phase, id)
+			}
+		}
+		if v := g.View(a, t0); v.EndedBy != "" {
+			t.Fatalf("%s: endedBy survived the next game: %q", phase, v.EndedBy)
+		}
+	}
+
+	g, a, b := playing(t, 1)
+	act(t, g, a, gotIt, t0)
+	act(t, g, b, gotIt, t0)
+	act(t, g, a, "next", t0)
+	act(t, g, a, "end_game", t0)
+	if g.phase != Final || g.TakeFinished() == nil || g.View(a, t0).EndedBy != "" {
+		t.Fatal("end_game in final must be ignored")
+	}
+
+	for _, clear := range []Action{{Type: "set_options", Hints: ptr(true)}, {Type: "start"}, {Type: "leave"}} {
+		g, a, b := startedGame(t, 1)
+		act(t, g, a, "end_game", t0)
+		if err := g.Act(b, clear, t0); err != nil {
+			t.Fatal(err)
+		}
+		if g.endedBy != "" {
+			t.Errorf("%s kept endedBy", clear.Type)
+		}
 	}
 }

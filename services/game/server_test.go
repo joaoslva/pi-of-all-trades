@@ -140,7 +140,7 @@ func TestTwoClientGame(t *testing.T) {
 	b.connect()
 	a.await(func(v View) bool { return v.Other != nil && v.Other.Connected })
 
-	if code, body := a.act("set_options", map[string]any{"rounds": 2, "seconds": 120}); code != 200 || !strings.Contains(string(body), `"options":{"rounds":2,"seconds":120,"hints":true,"pool":"all"}`) {
+	if code, body := a.act("set_options", map[string]any{"rounds": 2, "seconds": 120}); code != 200 || !strings.Contains(string(body), `"options":{"rounds":2,"seconds":120,"hints":true,"pool":"all","maxRounds":10}`) {
 		t.Fatalf("set_options: %d %s", code, body)
 	}
 	if v := b.await(func(v View) bool { return v.Options.Seconds == 120 }); v.Options.Rounds != 2 {

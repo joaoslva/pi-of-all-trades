@@ -15,7 +15,7 @@ Port 8090, plain HTTP. Binary `guessing-day`. Flags: `-listen :8090`, `-data /va
 
 ## Phases
 
-`lobby` -> `drawing` -> `playing` -> `roundEnd` -> (`drawing` again, or `final`) -> `lobby` (back_to_lobby).
+`lobby` -> `drawing` -> `playing` -> `roundEnd` -> (`drawing` again, or `final`) -> `lobby` (back_to_lobby). `end_game` goes from `drawing`, `playing` or `roundEnd` straight back to `lobby`.
 
 - lobby: players join, either may change the options with `set_options`, either may `start` once 2 players are present.
 - drawing: server picks one secret per player from a shuffle bag, drawing only from the chosen pool. The two are distinct, and a rider is never paired with their own `partner`. The bag keeps every character drawn since its last refill, across games and (via `history.jsonl`) across restarts, so consecutive games do not repeat characters. When a game starts and the bag has fewer free characters of the pool than the game needs, the pool's characters go back in, so no character repeats within one game. `start` returns `400 rounds` if the deck cannot cover the rounds (fewer than 2 characters per round). Each player taps `draw` to reveal their own secret. Playing starts when both have drawn.
@@ -34,8 +34,9 @@ All JSON. Errors are `{"error":"code","message":"text"}` with a 4xx status.
   - A new token while the lobby has room: a new player.
   - A new token while a game runs or the lobby is full: `409 {"error":"bonded","message":"The dragons have decided not to bond with you. Try again next year..."}`.
 - `GET /api/events?token=<t>` Server-Sent Events. First event is the current view, then one `event: view` per change, plus a keepalive comment every 15 s. 401 for an unknown token. A dropped stream marks the player disconnected, a new stream marks them connected.
-- `POST /api/action?token=<t>` body `{"type":"...", ...}`. Types: `set_options`, `start`, `draw`, `got_it`, `forfeit`, `next`, `back_to_lobby`, `leave`. Returns the caller's current view. Illegal in this phase: `409 {"error":"phase"}`.
+- `POST /api/action?token=<t>` body `{"type":"...", ...}`. Types: `set_options`, `start`, `draw`, `got_it`, `forfeit`, `next`, `back_to_lobby`, `end_game`, `leave`. Returns the caller's current view. Illegal in this phase: `409 {"error":"phase"}`.
   - `set_options {"rounds":n?, "seconds":n?, "hints":b?, "pool":"?"}`: any subset, lobby only (else 409 `phase`), idempotent, all or nothing. `400 rounds` outside 1..`maxRounds` of the resulting pool, `400 seconds` outside 120/180/300, `400 pool` unless `all` (every kind, `other` included), `riders` or `dragons`, or when that pool cannot cover one round. Changing the pool without `rounds` lowers `rounds` to the new `maxRounds` if needed. Options survive `back_to_lobby` and return to the defaults (3, 180, true, `all`) when the lobby empties.
+  - `end_game` in `drawing`, `playing` or `roundEnd` ends the game for both players: back to the lobby, both stay, scores reset, options kept, the bag keeps what was drawn, nothing is written to `history.jsonl`. The view then carries `endedBy`. In `lobby` or `final` it is ignored and returns the current view (a double tap is not an error).
   - `leave` in the lobby removes the player. During a game it aborts the game back to the lobby with scores reset, for the player who stays.
 - `GET /api/history` -> last 20 finished games, newest first: `[{"finished":"RFC3339","rounds":3,"players":[{"name":"A","score":5},{"name":"B","score":4}]}]`.
 - `GET /m/<opaque>/clip` and `GET /m/<opaque>/poster` serve media. `<opaque>` comes only from the holder's own `secret` and dies when the round ends (404 after).
@@ -49,7 +50,7 @@ All JSON. Errors are `{"error":"code","message":"text"}` with a 4xx status.
   "serverNow": 1760000000000,
   "you":   {"name": "A", "score": 3},
   "other": {"name": "B", "score": 2, "connected": true},
-  "options": {"rounds": 3, "seconds": 180, "hints": true, "pool": "all"},
+  "options": {"rounds": 3, "seconds": 180, "hints": true, "pool": "all", "maxRounds": 10},
   "round": 2,
   "canStart": false,
   "drawn":    {"you": true, "other": false},
@@ -66,7 +67,8 @@ All JSON. Errors are `{"error":"code","message":"text"}` with a 4xx status.
 - `secret` is present only for the holder, only after they sent `draw`, only until roundEnd. `clip` and `poster` are omitted when the character has no media. `tips` (hints for the holder, vague to specific) appears only here, never in `reveal`, and is omitted when `options.hints` is false. `color` (the card frame, `#rrggbb`) is in `secret` and in both `reveal` entries, omitted when the character has none. A client with no clip shows the rune reveal.
 - `resolved.you` / `resolved.other` is `null`, `"got_it"` or `"forfeit"`.
 - `reveal` and `gain` only in `roundEnd` and `final`. `final` only in `final`.
-- `round` counts from 1. `options` are the lobby settings, in every phase.
+- `round` counts from 1. `options` are the lobby settings, in every phase. `options.maxRounds` is read-only: the highest `rounds` the chosen pool allows.
+- `endedBy` (the name of the player who sent `end_game`) appears only in the lobby right after an ended game, and disappears with the next successful action (`set_options`, `start`, `leave`, ...).
 
 ## Content
 

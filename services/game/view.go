@@ -12,7 +12,7 @@ type View struct {
 	ServerNow int64         `json:"serverNow"`
 	You       YouView       `json:"you"`
 	Other     *OtherView    `json:"other"`
-	Options   Options       `json:"options"`
+	Options   OptionsView   `json:"options"`
 	Round     int           `json:"round"`
 	CanStart  bool          `json:"canStart"`
 	Drawn     Pair[bool]    `json:"drawn"`
@@ -22,6 +22,13 @@ type View struct {
 	Reveal    *RevealView   `json:"reveal,omitempty"`
 	Gain      *Pair[int]    `json:"gain,omitempty"`
 	Final     *FinalView    `json:"final,omitempty"`
+	EndedBy   string        `json:"endedBy,omitempty"`
+}
+
+// OptionsView adds the read-only rounds ceiling of the chosen pool.
+type OptionsView struct {
+	Options
+	MaxRounds int `json:"maxRounds"`
 }
 
 type YouView struct {
@@ -77,9 +84,10 @@ func (g *Game) View(token string, now time.Time) *View {
 		Phase:     g.phase,
 		ServerNow: now.UnixMilli(),
 		You:       YouView{p.Name, p.Score},
-		Options:   g.opts,
+		Options:   OptionsView{g.opts, g.maxRounds(g.opts.Pool)},
 		Round:     g.round,
 		CanStart:  g.phase == Lobby && len(g.players) == MaxPlayers,
+		EndedBy:   g.endedBy,
 	}
 	if o == nil {
 		return v
