@@ -11,7 +11,7 @@
   --danger-ink: #ff9d7e;
   --danger-bg: #3a1a1a;
   --ok-ink: #a9d98f;
-  --field: #8f7a9e;       /* input and ghost-button borders, 3:1 on panels */
+  --field: #9c7c45;       /* input and ghost-button borders, worn gold, 3:1 on panels */
   --stone: #3b3540;       /* card for characters with no colour */
   --rune-ink: #33233a;    /* background runes, drawn solid so the contrast check can hold text to it */
   --canvas: #231915;      /* the painting the join and lobby sit in */
@@ -88,8 +88,8 @@ body {
 
 button, input { font: inherit; color: inherit; }
 button {
-  min-height: 52px; padding: 0 18px; border-radius: 10px; cursor: pointer;
-  border: 1px solid var(--field); background: transparent; color: var(--text);
+  min-height: 44px; padding: 0 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--field); background: #e8b04a14; color: var(--text); /* gold at 8%: check-contrast.mjs holds the blends */
 }
 button.primary { background: linear-gradient(180deg, #f2c460, var(--gold)); color: var(--on-gold); border-color: var(--gold); font-weight: 700; letter-spacing: .04em; }
 button.big { min-height: 64px; font-size: 1.15rem; width: 100%; }
@@ -98,20 +98,26 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outl
 input { width: 100%; min-height: 52px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--field); background: var(--bg); }
 .row { display: flex; gap: 10px; align-items: center; }
 .row > * { flex: 1; }
-.opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+/* Label above, equal segments below: wraps on any width and font instead of fitting to the pixel. */
+.opt { margin-top: 10px; }
+.opt > span { display: block; margin-bottom: 4px; color: var(--muted); font-size: .9rem; }
 .seg { display: flex; align-items: center; gap: 6px; }
-.seg button { min-height: 48px; min-width: 48px; padding: 0 9px; }
-.seg output { min-width: 2ch; text-align: center; font-size: 1.4rem; color: var(--gold); }
+.seg > * { flex: 1 1 0; min-width: 0; }
+.seg button { padding: 4px; line-height: 1.1; font-size: min(1em, 4.6vw); overflow-wrap: anywhere; }
+.seg output { text-align: center; font-size: 1.4rem; color: var(--gold); }
+button.back { width: 100%; margin-top: 14px; }
 button[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); border-color: var(--gold); font-weight: 700; }
 .panel > .big { margin-top: 14px; }
-.link { min-height: 48px; border: 0; color: var(--gold); text-decoration: underline; }
+.link { border: 0; background: none; color: var(--gold); text-decoration: underline; }
+button.end { flex: none; align-self: flex-end; min-height: 40px; padding: 0 6px; font-size: .85rem; }
+.notice { color: var(--gold); }
 
 .refused { text-align: center; border-color: var(--danger-ink); background: var(--danger-bg); }
 .refused h2 { color: var(--danger-ink); }
 .refused p { font-size: 1.15rem; font-style: italic; }
 
 .secret { background: var(--panel); border: 1px solid var(--gold); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
-.sbody { display: flex; flex-direction: column; min-height: 0; padding: 12px; }
+.sbody { display: flex; flex-direction: column; min-height: 0; padding: 12px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .secret > button { flex: none; width: 100%; display: flex; justify-content: space-between; align-items: center; border: 0; border-radius: 0; min-height: 48px; color: var(--gold); background: var(--panel-hi); text-transform: uppercase; letter-spacing: .12em; font-size: .85rem; }
 .secret.collapsed .sbody { display: none; }
 .stage { flex: 1; min-height: 0; width: 100%; display: grid; place-items: center; overflow: hidden; }
@@ -123,16 +129,14 @@ button[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); bo
 .card.ink-dark { color: var(--on-gold); }
 .card .frame { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* The card is the part that gives way, so open tips never push Got it / Forfeit off a short screen. */
-.secret .card { height: var(--card-h); min-height: 0; max-width: 100%; margin: 0 auto; }
+.secret .card { height: var(--card-h); min-height: min(var(--card-h), 22dvh); max-width: 100%; margin: 0 auto; }
 body:has(.secret) .app { height: 100dvh; min-height: 0; }
-.sname { font-size: max(14px, 9cqi); line-height: 1.1; transition: opacity .4s; }
+.sname { font-size: max(14px, 9cqi); line-height: 1.1; }
 .skind { text-transform: uppercase; letter-spacing: .2em; font-size: max(11px, 4.4cqi); }
-.runes { display: flex; flex-wrap: wrap; justify-content: center; gap: 2cqi 4cqi; }
-.word { display: flex; gap: .6cqi; }
-.word .r { display: block; width: 7cqi; transition: transform .2s, opacity .2s; }
-.r .rune { display: block; width: 100%; height: auto; }
-.r.spin { opacity: .5; transform: scale(.8); }
-.revealing .sname { opacity: 0; }
+.sname .word { white-space: nowrap; }
+.slot { display: inline-block; }
+/* The letter keeps its place but is not painted; the rune is drawn behind it. */
+.slot.spin { -webkit-text-fill-color: transparent; background: no-repeat center / auto .8em; }
 .hints { flex: none; margin-top: 10px; }
 .tips { margin: 0 0 6px; padding-left: 1.4em; text-align: left; }
 .tips li { margin: 3px 0; }
@@ -154,6 +158,9 @@ button.hint { min-height: 44px; width: 100%; color: var(--gold); }
 .hearth { display: none; }
 body.home { background: radial-gradient(90% 45% at 50% 100%, #4a2410, transparent), var(--cobble, none), var(--mortar); }
 .home .embers, .home .corner { display: none; }
+/* Lobby and Settings: only the painting on the wall; the title and fireplace belong to the join screen. */
+body.home:not(.scene) .title, body.home:not(.scene) .hearth { display: none; }
+body.home:not(.scene) #screen { margin: auto 4px; }
 .home .app { height: 100dvh; min-height: 0; gap: 0; padding-top: 40px; }
 .home #screen {
   flex: none; position: relative; margin: auto 4px 22px; padding: 14px; gap: 10px;

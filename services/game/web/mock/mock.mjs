@@ -10,9 +10,15 @@ const WEB = fileURLToPath(new URL("..", import.meta.url));
 const PORT = +(process.argv[2] || 18091);
 const CLIP = join(WEB, "mock", "test-clip.mp4");
 const POSTER = join(WEB, "mock", "test-poster.jpg");
+// Long on purpose: three of them overflow a short phone screen, which the scroll check needs.
+const VIOLET_TIPS = [
+  "Violet vague tip. Small and stubborn, raised among books and quiet corridors, never meant to be in this quadrant at all.",
+  "Violet closer tip. Fights with daggers instead of a sword, and wears armour made for her by someone who cares a lot.",
+  "Violet specific tip. Her mother commands the college, and her bond surprised everyone, including two dragons at once.",
+];
 const CHARS = [
   { name: "Tairn", kind: "dragon", color: "#1F2421", media: true, tips: ["Tairn tip one.", "Tairn tip two."] },
-  { name: "Violet Sorrengail", kind: "rider", color: "#1F2421", tips: ["Violet vague tip.", "Violet closer tip.", "Violet specific tip."] },
+  { name: "Violet Sorrengail", kind: "rider", color: "#1F2421", tips: VIOLET_TIPS },
   { name: "Andarna", kind: "dragon", color: "#FFD400", tips: ["Andarna tip."] },
   { name: "Xaden Riorson", kind: "rider", color: "#1A5B92" },
   { name: "Sgaeyl", kind: "dragon", color: "#1A5B92" },
@@ -23,7 +29,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/cs
 
 let g;
 const DEFAULTS = { rounds: 3, seconds: 180, hints: true, pool: "all" };
-const reset = () => (g = { phase: "lobby", players: [], options: { ...DEFAULTS }, round: 0, deadline: 0, used: 0, gain: null, final: null, media: new Map(), history: [] });
+const reset = () => (g = { endedBy: "", phase: "lobby", players: [], options: { ...DEFAULTS }, round: 0, deadline: 0, used: 0, gain: null, final: null, media: new Map(), history: [] });
 reset();
 const other = p => g.players.find(q => q !== p);
 const roundMs = () => (+process.env.MOCK_SECONDS || g.options.seconds) * 1000;
@@ -32,7 +38,7 @@ const bonus = () => Math.min(2, Math.floor((3 * Math.max(0, g.deadline - Date.no
 function view(p) {
   const o = other(p), pub = q => ({ name: q.name, score: q.score, connected: q.connected });
   const v = { phase: g.phase, serverNow: Date.now(), you: { name: p.name, score: p.score }, other: o ? pub(o) : null,
-    options: g.options, round: g.round, canStart: g.phase === "lobby" && g.players.length === 2 };
+    options: { ...g.options, maxRounds: 10 }, round: g.round, endedBy: g.endedBy || undefined, canStart: g.phase === "lobby" && g.players.length === 2 };
   if (g.phase === "drawing" || g.phase === "playing") {
     v.drawn = { you: p.drawn, other: o.drawn }; v.resolved = { you: p.res, other: o.res };
     if (g.phase === "playing") v.deadline = g.deadline;
@@ -100,9 +106,13 @@ function act(p, a, res) {
     case "got_it": case "forfeit": if (ph !== "playing") return bad(); p.res ||= a.type; maybeEnd(); break;
     case "next": if (ph === "roundEnd") startRound(); else if (ph !== "drawing") return bad(); break;
     case "back_to_lobby": if (ph !== "final") return bad(); g.players.forEach(q => (q.score = 0)); g.phase = "lobby"; g.round = 0; g.used = 0; break;
-    case "leave": g.players = g.players.filter(q => q !== p); if (!g.players.length) g.options = { ...DEFAULTS }; if (ph !== "lobby") { g.phase = "lobby"; g.round = 0; g.players.forEach(q => (q.score = 0)); } break;
+    case "end_game": if (["drawing", "playing", "roundEnd"].includes(ph)) {
+      g.phase = "lobby"; g.round = 0; g.media.clear(); g.players.forEach(q => (q.score = 0)); g.endedBy = p.name;
+    } break;
+    case "leave": p.sse?.end(); p.sse = null; g.players = g.players.filter(q => q !== p); if (!g.players.length) g.options = { ...DEFAULTS }; if (ph !== "lobby") { g.phase = "lobby"; g.round = 0; g.players.forEach(q => (q.score = 0)); } break;
     default: return err(res, 400, "type");
   }
+  if (a.type !== "end_game") g.endedBy = "";
   send(res, 200, p.token && g.players.includes(p) ? view(p) : {});
   push();
 }

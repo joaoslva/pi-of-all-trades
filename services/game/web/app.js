@@ -18,7 +18,7 @@ const h = (tag, attrs = {}, ...kids) => {
 };
 
 let token = store.get(), view = null, receivedAt = 0, es = null, refusal = null, showHistory = false, history = null, showSettings = false;
-let secretNode = null, secretKey = "", armedRound = 0, revealTimer = 0;
+let secretNode = null, secretKey = "", armedRound = 0, revealTimer = 0, rejoinTimer = 0, endArmed = 0;
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined);
@@ -36,20 +36,39 @@ function setView(v) {
 async function join(name) {
   const r = await api("/api/join", { name, token: token || undefined });
   if (r.status === 409 && r.j.error === "bonded") { refusal = r.j.message; render(view); return; }
-  if (!r.ok) { store.del(); token = null; view = null; render(null); return; }
+  if (!r.ok) { toJoin(); return; }
   token = r.j.token; store.set(token);
   setView(r.j.view); connect();
 }
 
 function connect() {
   if (es) es.close();
-  es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
-  es.addEventListener("view", e => { $("lost").hidden = true; setView(JSON.parse(e.data)); });
-  es.onerror = () => {
+  const src = es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+  src.addEventListener("view", e => { $("lost").hidden = true; setView(JSON.parse(e.data)); });
+  src.onerror = () => {
+    if (src !== es) return; // a stream we closed on purpose (leave) still reports its end
     $("lost").hidden = false;
     // A closed stream means the browser gave up (401 after a server restart): rejoin by token ourselves.
-    if (es.readyState === EventSource.CLOSED) setTimeout(() => join(view ? view.you.name : ""), 2000);
+    if (src.readyState === EventSource.CLOSED) { clearTimeout(rejoinTimer); rejoinTimer = setTimeout(() => join(view ? view.you.name : ""), 2000); }
   };
+}
+
+// Every way back to the join screen comes through here, so no screen state outlives the player.
+function toJoin() {
+  clearTimeout(rejoinTimer); clearTimeout(endArmed); rejoinTimer = endArmed = 0;
+  if (es) es.close();
+  es = null; $("lost").hidden = true;
+  store.del(); token = null; view = null; refusal = null;
+  showHistory = false; history = null; showSettings = false; armedRound = 0;
+  try { sessionStorage.removeItem("gameTips"); } catch { /* nothing stored */ }
+  render(null);
+}
+
+function leave() {
+  const t = token;
+  toJoin();
+  // shortcut: a lost leave request leaves a ghost in the lobby until the server restarts; retry if that bites.
+  api(`/api/action?token=${encodeURIComponent(t)}`, { type: "leave" }).catch(() => {});
 }
 
 const remaining = () => view.deadline - (view.serverNow + Date.now() - receivedAt);
@@ -85,28 +104,23 @@ const card = (c, ...kids) => {
 };
 
 const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-function runeRow(name) {
-  const letters = [];
-  const row = h("div", { class: "runes", "aria-hidden": "true" }, name.split(" ").map(w => h("span", { class: "word" }, [...w].map(ch => {
-    const s = h("span", { class: "r" });
-    s.innerHTML = runeSvg(ch);
-    letters.push([s, ch]);
+// Each letter becomes a slot that keeps its real letter (unpainted) under a cycling rune background, so the line is the final name from the start.
+function startReveal(card, name) {
+  const el = card.querySelector(".sname"), slots = [], ink = getComputedStyle(el).color;
+  const img = [...ABC].map(c => `url("data:image/svg+xml,${encodeURIComponent(runeSvg(c).replace("<svg", `<svg xmlns="http://www.w3.org/2000/svg" color="${ink}"`))}")`);
+  el.replaceChildren(...name.split(" ").flatMap((w, i) => [i ? " " : null, h("span", { class: "word" }, [...w].map(ch => {
+    const s = h("span", { class: "slot spin" }, ch);
+    slots.push([s, ch]);
     return s;
-  }))));
-  return { row, letters };
-}
-
-function startReveal(el, letters) {
-  const n = letters.length, total = Math.min(3500, 1600 + n * 90), step = (total - 900) / n, t0 = performance.now();
-  el.classList.add("revealing");
-  letters.forEach(([s]) => s.classList.add("spin"));
+  }))]).filter(Boolean));
+  const n = slots.length, total = Math.min(3500, 1600 + n * 90), step = (total - 900) / n, t0 = performance.now();
+  card.classList.add("revealing");
   const tick = () => {
     const t = performance.now() - t0;
-    letters.forEach(([s, ch], i) => {
+    slots.forEach(([s, ch], i) => {
       if (!s.classList.contains("spin")) return;
-      const settled = t >= 600 + (i + 1) * step;
-      s.innerHTML = runeSvg(settled ? ch : ABC[Math.floor(Math.random() * 26)]);
-      if (settled) s.classList.remove("spin");
+      if (t >= 600 + (i + 1) * step) { s.style.backgroundImage = ""; s.classList.remove("spin"); return; }
+      s.style.backgroundImage = img[Math.floor(Math.random() * 26)];
     });
     if (t >= total) stopReveal();
   };
@@ -115,7 +129,12 @@ function startReveal(el, letters) {
 }
 function stopReveal() {
   clearInterval(revealTimer); revealTimer = 0;
-  if (secretNode) secretNode.querySelector(".card").classList.remove("revealing");
+  const c = secretNode && secretNode.querySelector(".card");
+  if (!c || !c.classList.contains("revealing")) return;
+  c.classList.remove("revealing");
+  const sn = c.querySelector(".sname");
+  sn.textContent = sn.textContent; // every slot holds its real letter, so this leaves the plain name
+
 }
 
 function hints(tips, key) {
@@ -141,11 +160,10 @@ function secretCard(v) {
   if (!secretNode || secretKey !== key) {
     stopReveal();
     secretKey = key;
-    const { row, letters } = runeRow(s.name);
-    let face = row;
+    let face = null;
     if (s.clip) {
       const stage = h("div", { class: "stage" });
-      const fallback = () => stage.replaceWith(row);
+      const fallback = () => stage.remove();
       const video = h("video", { src: s.clip, poster: s.poster, muted: true, playsinline: true, autoplay: true, "aria-hidden": "true" });
       video.muted = true; // the attribute alone is not honoured for autoplay in every browser
       video.addEventListener("ended", () => s.poster ? stage.replaceChildren(h("img", { src: s.poster, alt: "" })) : fallback());
@@ -162,7 +180,7 @@ function secretCard(v) {
     } }, h("span", {}, "Your secret"), h("span", {}, "hide"));
     secretNode = h("div", { class: "secret" }, toggle, body);
     // Animate only a draw this page saw happen: a reload mid-round shows the settled card.
-    if (!s.clip && armedRound === v.round && !matchMedia("(prefers-reduced-motion: reduce)").matches) startReveal(front, letters);
+    if (!s.clip && armedRound === v.round && !matchMedia("(prefers-reduced-motion: reduce)").matches) startReveal(front, s.name);
   }
   const hb = secretNode.querySelector(".hints");
   if (hb) hb.hidden = v.phase !== "playing";
@@ -171,6 +189,12 @@ function secretCard(v) {
 
 const btn = (label, onclick, cls = "", extra = {}) => h("button", { class: cls, onclick, ...extra }, label);
 const panel = (...kids) => h("div", { class: "panel" }, ...kids);
+// Two taps on purpose: the first arms it for 4 s, only the second ends the game for both phones.
+const endGame = () => h("button", { class: "link end", onclick: () => {
+  if (endArmed) { clearTimeout(endArmed); endArmed = 0; act("end_game"); return; }
+  endArmed = setTimeout(() => { endArmed = 0; render(view); }, 4000);
+  render(view);
+} }, endArmed ? "Really end?" : "End game");
 
 const reveals = v => h("div", { class: "verdict" },
   [[v.reveal.yourGuess, "You guessed", v.gain.you], [v.reveal.theirGuess, `${v.other.name} guessed`, v.gain.other]].map(([c, label, gain]) =>
@@ -191,13 +215,14 @@ const screens = {
     return [
       panel(h("h2", {}, "Lobby"), h("p", {}, `${v.you.name} (you)`),
         h("p", { class: v.other ? "" : "muted" }, v.other ? v.other.name : "Waiting for a second rider..."),
-        h("p", { class: "muted summary" }, `${o.rounds} round${o.rounds > 1 ? "s" : ""}, ${fmt(o.seconds * 1000)}, hints ${o.hints ? "on" : "off"}, ${o.pool}`)),
+        h("p", { class: "muted summary" }, `${o.rounds} round${o.rounds > 1 ? "s" : ""}, ${fmt(o.seconds * 1000)}, hints ${o.hints ? "on" : "off"}, ${o.pool}`),
+        v.endedBy ? h("p", { class: "notice" }, v.endedBy === v.you.name ? "You ended the game" : `${v.endedBy} ended the game`) : null),
       btn("Settings", () => { showSettings = true; showHistory = false; render(view); }),
       btn("Start", () => act("start"), "primary big", { disabled: !v.canStart }),
       hist,
       h("div", { class: "row" },
         btn(showHistory ? "Roll up the scroll" : "Past games", toggleHistory, "link"),
-        btn("Leave", () => act("leave").then(() => { store.del(); token = null; if (es) es.close(); view = null; render(null); }), "link")),
+        btn("Leave", leave, "link")),
     ];
   },
   settings(v) {
@@ -208,11 +233,11 @@ const screens = {
       row("Rounds",
         btn("-", () => set({ rounds: o.rounds - 1 }), "", { disabled: o.rounds <= 1, "aria-label": "Fewer rounds" }),
         h("output", {}, String(o.rounds)),
-        btn("+", () => set({ rounds: o.rounds + 1 }), "", { disabled: o.rounds >= 10, "aria-label": "More rounds" })),
+        btn("+", () => set({ rounds: o.rounds + 1 }), "", { disabled: o.rounds >= o.maxRounds, "aria-label": "More rounds" })),
       row("Length", choice("seconds", 120, "2:00"), choice("seconds", 180, "3:00"), choice("seconds", 300, "5:00")),
       row("Hints", btn(o.hints ? "On" : "Off", () => set({ hints: !o.hints }), "", { "aria-pressed": String(o.hints), "aria-label": "Hints" })),
       row("Pool", choice("pool", "all", "All"), choice("pool", "riders", "Riders"), choice("pool", "dragons", "Dragons")),
-      btn("Back", () => { showSettings = false; render(view); }, "big"));
+      btn("Back", () => { showSettings = false; render(view); }, "back"));
   },
   drawing(v) {
     if (!v.drawn.you) armedRound = v.round;
@@ -253,18 +278,21 @@ async function toggleHistory() {
 
 function render(v) {
   document.body.classList.toggle("home", !v || v.phase === "lobby");
+  document.body.classList.toggle("scene", !v);
   renderBar(v);
   const screen = $("screen");
+  const endable = !!v && (v.phase === "drawing" || v.phase === "playing" || v.phase === "roundEnd");
+  if (!v || !(v.phase === "drawing" || v.phase === "playing")) { stopReveal(); secretNode = null; secretKey = ""; }
+  if (!endable) { clearTimeout(endArmed); endArmed = 0; }
   if (refusal) {
     screen.replaceChildren(h("div", { class: "panel refused" }, h("h2", {}, "Refused"), h("p", {}, refusal),
       btn("Back", () => { refusal = null; render(view); }, "big")));
     return;
   }
   if (!v) { screen.replaceChildren(screens.join()); return; }
-  if (!(v.phase === "drawing" || v.phase === "playing")) { stopReveal(); secretNode = null; secretKey = ""; }
   if (v.phase !== "lobby") showSettings = false;
   const out = screens[showSettings ? "settings" : v.phase](v);
-  screen.replaceChildren(...[out].flat().filter(Boolean));
+  screen.replaceChildren(...[endable ? endGame() : null, out].flat().filter(Boolean));
 }
 
 setInterval(() => {
