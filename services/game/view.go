@@ -12,7 +12,7 @@ type View struct {
 	ServerNow int64         `json:"serverNow"`
 	You       YouView       `json:"you"`
 	Other     *OtherView    `json:"other"`
-	Rounds    int           `json:"rounds"`
+	Options   Options       `json:"options"`
 	Round     int           `json:"round"`
 	CanStart  bool          `json:"canStart"`
 	Drawn     Pair[bool]    `json:"drawn"`
@@ -77,7 +77,7 @@ func (g *Game) View(token string, now time.Time) *View {
 		Phase:     g.phase,
 		ServerNow: now.UnixMilli(),
 		You:       YouView{p.Name, p.Score},
-		Rounds:    g.rounds,
+		Options:   g.opts,
 		Round:     g.round,
 		CanStart:  g.phase == Lobby && len(g.players) == MaxPlayers,
 	}
@@ -96,7 +96,10 @@ func (g *Game) View(token string, now time.Time) *View {
 			v.Deadline = g.deadline.UnixMilli()
 		}
 		if p.drawn {
-			v.Secret = &SecretView{CharView: charView(p.secret), Tips: p.secret.Tips}
+			v.Secret = &SecretView{CharView: charView(p.secret)}
+			if g.opts.Hints {
+				v.Secret.Tips = p.secret.Tips
+			}
 			if p.secret.Clip != "" {
 				v.Secret.Clip = "/m/" + p.opaque + "/clip"
 			}

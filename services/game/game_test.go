@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func startedGame(t *testing.T, rounds int) (*Game, string, string) {
 	t.Helper()
 	g := newGame()
 	a, b := mustJoin(t, g, "A"), mustJoin(t, g, "B")
-	if err := g.Act(a, Action{Type: "set_rounds", Rounds: rounds}, t0); err != nil {
+	if err := g.Act(a, Action{Type: "set_options", Rounds: &rounds}, t0); err != nil {
 		t.Fatal(err)
 	}
 	act(t, g, a, "start", t0)
@@ -96,7 +97,7 @@ func TestLobbyRules(t *testing.T) {
 	}
 	mustJoin(t, g, "B")
 	for _, n := range []int{0, 11, 13} {
-		if err := g.Act(a, Action{Type: "set_rounds", Rounds: n}, t0); err != errRounds {
+		if err := g.Act(a, Action{Type: "set_options", Rounds: &n}, t0); err != errRounds {
 			t.Errorf("rounds %d: %v", n, err)
 		}
 	}
@@ -390,7 +391,7 @@ func pool(n int, partnered bool) []Character {
 // playGame plays one game of the given rounds from the lobby and back, checking every round's pair, and returns the drawn ids.
 func playGame(t *testing.T, g *Game, a, b string, rounds int) []string {
 	t.Helper()
-	if err := g.Act(a, Action{Type: "set_rounds", Rounds: rounds}, t0); err != nil {
+	if err := g.Act(a, Action{Type: "set_options", Rounds: &rounds}, t0); err != nil {
 		t.Fatal(err)
 	}
 	act(t, g, a, "start", t0)
@@ -464,7 +465,7 @@ func TestBagRefillTinyPools(t *testing.T) {
 		for seed := uint64(0); seed < 30; seed++ {
 			g, a, b := twoPlayers(t, pool(c.n, c.partnered), seed)
 			for i := 0; i < 10; i++ {
-				playGame(t, g, a, b, g.maxRounds())
+				playGame(t, g, a, b, g.maxRounds(g.opts.Pool))
 			}
 		}
 	}
@@ -477,5 +478,193 @@ func TestBagRefillTinyPools(t *testing.T) {
 	g, a, _ = twoPlayers(t, pool(1, false), 1)
 	if err := g.Act(a, Action{Type: "start"}, t0); err != errRounds {
 		t.Errorf("start with one character: %v", err)
+	}
+}
+
+// mixed returns nr riders, nd dragons and no others, unpartnered.
+func mixed(nr, nd, no int) []Character {
+	var cs []Character
+	for k, n := range map[string]int{"rider": nr, "dragon": nd, "other": no} {
+		for i := 0; i < n; i++ {
+			cs = append(cs, Character{ID: fmt.Sprintf("%s-%02d", k, i), Name: fmt.Sprintf("%s %02d", k, i), Kind: k})
+		}
+	}
+	slices.SortFunc(cs, func(a, b Character) int { return strings.Compare(a.ID, b.ID) })
+	return cs
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func TestSetOptions(t *testing.T) {
+	g, a, _ := twoPlayers(t, mixed(5, 20, 1), 1)
+	bad := []struct {
+		a    Action
+		want *apiError
+	}{
+		{Action{Seconds: ptr(0)}, errSeconds},
+		{Action{Seconds: ptr(150)}, errSeconds},
+		{Action{Pool: ptr("elves")}, errPool},
+		{Action{Pool: ptr("")}, errPool},
+		{Action{Rounds: ptr(0)}, errRounds},
+		{Action{Rounds: ptr(11)}, errRounds},
+		{Action{Pool: ptr("riders"), Rounds: ptr(3)}, errRounds}, // 5 riders cover 2 rounds
+		{Action{Seconds: ptr(120), Rounds: ptr(99)}, errRounds},  // nothing applies when one field is bad
+	}
+	for _, c := range bad {
+		c.a.Type = "set_options"
+		if err := g.Act(a, c.a, t0); err != c.want {
+			t.Errorf("%+v: %v, want %v", c.a, err, c.want)
+		}
+	}
+	if g.opts != defaultOptions() {
+		t.Fatalf("a refused request changed options: %+v", g.opts)
+	}
+	set := func(a2 Action) {
+		t.Helper()
+		a2.Type = "set_options"
+		if err := g.Act(a, a2, t0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set(Action{Rounds: ptr(10)})
+	set(Action{Seconds: ptr(300), Hints: ptr(false)})
+	set(Action{Seconds: ptr(300), Hints: ptr(false)})
+	if want := (Options{10, 300, false, "all"}); g.opts != want {
+		t.Fatalf("subset or repeat: %+v want %+v", g.opts, want)
+	}
+	set(Action{Pool: ptr("riders")})
+	if g.opts.Rounds != 2 {
+		t.Errorf("riders pool did not clamp rounds: %+v", g.opts)
+	}
+	set(Action{Pool: ptr("dragons")})
+	if want := (Options{2, 300, false, "dragons"}); g.opts != want {
+		t.Errorf("pool change: %+v want %+v", g.opts, want)
+	}
+
+	// a pool that cannot cover one round is refused, not left unstartable
+	g, a, _ = twoPlayers(t, mixed(1, 4, 0), 1)
+	if err := g.Act(a, Action{Type: "set_options", Pool: ptr("riders")}, t0); err != errPool {
+		t.Errorf("one-rider pool: %v", err)
+	}
+
+	g, a, _ = startedGame(t, 1)
+	if err := g.Act(a, Action{Type: "set_options", Hints: ptr(false)}, t0); err != errPhase {
+		t.Errorf("set_options while drawing: %v", err)
+	}
+}
+
+func TestScaledSpeedBonus(t *testing.T) {
+	for _, L := range RoundLengths {
+		sec := func(n int) time.Duration { return time.Duration(n) * time.Second }
+		for _, c := range []struct {
+			remaining time.Duration
+			gain      int
+		}{
+			{sec(L), 3}, {sec(2 * L / 3), 3}, {sec(2*L/3) - time.Millisecond, 2},
+			{sec(L / 3), 2}, {sec(L/3) - time.Millisecond, 1}, {time.Millisecond, 1},
+		} {
+			g, a, b := startedGame(t, 1)
+			g.opts.Seconds = L
+			act(t, g, a, "draw", t0)
+			act(t, g, b, "draw", t0)
+			if !g.deadline.Equal(t0.Add(sec(L))) {
+				t.Fatalf("%ds: deadline %v", L, g.deadline.Sub(t0))
+			}
+			act(t, g, a, gotIt, g.deadline.Add(-c.remaining))
+			if g.players[0].gain != c.gain {
+				t.Errorf("%ds round, %v left: gain %d want %d", L, c.remaining, g.players[0].gain, c.gain)
+			}
+			if g.Tick(g.deadline.Add(-time.Millisecond)) || !g.Tick(g.deadline) || g.players[1].resolved != forfeit {
+				t.Errorf("%ds round: timeout not at the chosen length", L)
+			}
+		}
+	}
+}
+
+func TestPoolFiltering(t *testing.T) {
+	for _, c := range []struct {
+		pool, kind string
+		chars      []Character
+	}{
+		{"riders", "rider", mixed(10, 20, 3)},
+		{"dragons", "dragon", mixed(20, 10, 3)},
+		{"riders", "rider", mixed(3, 20, 3)}, // one round per game: the bag refills every game
+		{"dragons", "dragon", mixed(20, 2, 0)},
+	} {
+		for seed := uint64(0); seed < 50; seed++ {
+			g, a, b := twoPlayers(t, c.chars, seed)
+			if err := g.Act(a, Action{Type: "set_options", Pool: &c.pool}, t0); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 5; i++ {
+				ids := playGame(t, g, a, b, g.opts.Rounds)
+				seen := map[string]bool{}
+				for _, id := range ids {
+					if !strings.HasPrefix(id, c.kind) || seen[id] {
+						t.Fatalf("%s pool, seed %d: drew %v", c.pool, seed, ids)
+					}
+					seen[id] = true
+				}
+			}
+		}
+	}
+	kinds := map[string]bool{}
+	for seed := uint64(0); seed < 50; seed++ {
+		g, a, b := twoPlayers(t, mixed(3, 3, 3), seed)
+		for _, id := range playGame(t, g, a, b, 3) {
+			kinds[strings.Split(id, "-")[0]] = true
+		}
+	}
+	if len(kinds) != 3 {
+		t.Errorf("all pool drew only %v", kinds)
+	}
+}
+
+func TestHintsOff(t *testing.T) {
+	for _, hints := range []bool{true, false} {
+		chars := testChars()
+		for i := range chars {
+			chars[i].Tips = []string{"a tip"}
+		}
+		g, a, _ := twoPlayers(t, chars, 1)
+		if err := g.Act(a, Action{Type: "set_options", Hints: &hints}, t0); err != nil {
+			t.Fatal(err)
+		}
+		act(t, g, a, "start", t0)
+		act(t, g, a, "draw", t0)
+		js, _ := json.Marshal(g.View(a, t0))
+		if strings.Contains(string(js), "tips") != hints {
+			t.Errorf("hints %v: %s", hints, js)
+		}
+	}
+}
+
+func TestOptionsPersistAndReset(t *testing.T) {
+	g, a, b := twoPlayers(t, mixed(10, 10, 0), 1)
+	want := Options{2, 120, false, "dragons"}
+	if err := g.Act(a, Action{Type: "set_options", Rounds: ptr(2), Seconds: ptr(120), Hints: ptr(false), Pool: ptr("dragons")}, t0); err != nil {
+		t.Fatal(err)
+	}
+	playGame(t, g, a, b, 2)
+	if g.opts != want {
+		t.Fatalf("back_to_lobby lost options: %+v", g.opts)
+	}
+	act(t, g, a, "start", t0)
+	act(t, g, b, "leave", t0) // aborts the game, A stays
+	if g.opts != want {
+		t.Fatalf("one player leaving reset options: %+v", g.opts)
+	}
+	act(t, g, a, "leave", t0)
+	if g.opts != defaultOptions() {
+		t.Errorf("empty lobby kept options: %+v", g.opts)
+	}
+
+	g, a, b = twoPlayers(t, mixed(10, 10, 0), 1)
+	g.Act(a, Action{Type: "set_options", Seconds: ptr(300)}, t0)
+	act(t, g, a, "start", t0)
+	g.SetConnected(a, false, t0)
+	g.SetConnected(b, false, t0)
+	if !g.Tick(t0.Add(ReapAfter)) || len(g.players) != 0 || g.opts != defaultOptions() {
+		t.Errorf("reap kept options: %+v", g.opts)
 	}
 }

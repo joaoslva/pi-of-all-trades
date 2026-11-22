@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -10,7 +11,7 @@ import (
 
 const (
 	MaxPlayers    = 2
-	RoundSeconds  = 180
+	RoundSeconds  = 180 // the default round length
 	DefaultRounds = 3
 	MinRounds     = 1
 	MaxRounds     = 10
@@ -18,6 +19,22 @@ const (
 	ReapAfter     = 10 * time.Minute
 	HistoryKeep   = 20
 )
+
+// RoundLengths are the round lengths a lobby may pick, in seconds.
+var RoundLengths = []int{120, 180, 300}
+
+// poolKinds maps a pool option to the character kind it draws; "" draws every kind.
+var poolKinds = map[string]string{"all": "", "riders": "rider", "dragons": "dragon"}
+
+// Options are the lobby settings. They survive back_to_lobby and reset when the lobby empties.
+type Options struct {
+	Rounds  int    `json:"rounds"`
+	Seconds int    `json:"seconds"`
+	Hints   bool   `json:"hints"`
+	Pool    string `json:"pool"`
+}
+
+func defaultOptions() Options { return Options{DefaultRounds, RoundSeconds, true, "all"} }
 
 type Phase string
 
@@ -70,9 +87,13 @@ type HistoryEntry struct {
 	Chars    []string        `json:"-"` // secret ids in draw order; only the history file carries them
 }
 
+// Action is a request body; set_options sends any subset of the option fields.
 type Action struct {
-	Type   string `json:"type"`
-	Rounds int    `json:"rounds"`
+	Type    string  `json:"type"`
+	Rounds  *int    `json:"rounds"`
+	Seconds *int    `json:"seconds"`
+	Hints   *bool   `json:"hints"`
+	Pool    *string `json:"pool"`
 }
 
 type apiError struct {
@@ -89,6 +110,8 @@ var (
 	errName    = &apiError{400, "name", "Names are 1 to 20 characters."}
 	errTaken   = &apiError{409, "name_taken", "Someone here already has that name."}
 	errRounds  = &apiError{400, "rounds", "Pick a number of rounds the deck can support."}
+	errSeconds = &apiError{400, "seconds", "A round lasts 120, 180 or 300 seconds."}
+	errPool    = &apiError{400, "pool", "Pick all, riders or dragons."}
 	errPlayers = &apiError{409, "players", "Two players are needed to start."}
 	errUnknown = &apiError{401, "unknown_token", "Unknown token."}
 	errAction  = &apiError{400, "action", "Unknown action."}
@@ -100,7 +123,7 @@ type Game struct {
 	chars     []Character
 	phase     Phase
 	players   []*Player
-	rounds    int
+	opts      Options
 	round     int
 	used      map[string]bool // the shuffle bag: drawn since the last refill, kept across games
 	drawn     []string        // this game's secret ids
@@ -110,7 +133,7 @@ type Game struct {
 }
 
 func NewGame(chars []Character, rng *rand.Rand) *Game {
-	return &Game{rng: rng, chars: chars, phase: Lobby, rounds: DefaultRounds, used: map[string]bool{}}
+	return &Game{rng: rng, chars: chars, phase: Lobby, opts: defaultOptions(), used: map[string]bool{}}
 }
 
 func (g *Game) hexToken() string {
@@ -139,7 +162,28 @@ func (g *Game) other(p *Player) *Player {
 	return nil
 }
 
-func (g *Game) maxRounds() int { return min(MaxRounds, len(g.chars)/MaxPlayers) }
+// pool returns the characters the given pool option draws from.
+func (g *Game) pool(name string) []*Character {
+	var out []*Character
+	k := poolKinds[name]
+	for i := range g.chars {
+		if k == "" || g.chars[i].Kind == k {
+			out = append(out, &g.chars[i])
+		}
+	}
+	return out
+}
+
+func (g *Game) maxRounds(pool string) int { return min(MaxRounds, len(g.pool(pool))/MaxPlayers) }
+
+// refill empties the bag of the current pool's characters, except keep.
+func (g *Game) refill(keep []*Character) {
+	for _, c := range g.pool(g.opts.Pool) {
+		if !slices.Contains(keep, c) {
+			delete(g.used, c.ID)
+		}
+	}
+}
 
 // Remember seeds the bag with recently drawn ids, newest first, leaving at least one default game's worth free.
 func (g *Game) Remember(ids []string) {
@@ -153,8 +197,8 @@ func (g *Game) Remember(ids []string) {
 
 func (g *Game) free() int {
 	n := 0
-	for i := range g.chars {
-		if !g.used[g.chars[i].ID] {
+	for _, c := range g.pool(g.opts.Pool) {
+		if !g.used[c.ID] {
 			n++
 		}
 	}
@@ -238,14 +282,11 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 	}
 	g.Tick(now)
 	switch a.Type {
-	case "set_rounds":
+	case "set_options":
 		if g.phase != Lobby {
 			return errPhase
 		}
-		if a.Rounds < MinRounds || a.Rounds > g.maxRounds() {
-			return errRounds
-		}
-		g.rounds = a.Rounds
+		return g.setOptions(a)
 	case "start":
 		if g.phase != Lobby {
 			return errPhase
@@ -253,12 +294,12 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 		if len(g.players) < MaxPlayers {
 			return errPlayers
 		}
-		if g.rounds > g.maxRounds() {
+		if g.opts.Rounds > g.maxRounds(g.opts.Pool) {
 			return errRounds
 		}
 		// refill up front so secrets never repeat within one game
-		if g.free() < g.rounds*MaxPlayers {
-			g.used = map[string]bool{}
+		if g.free() < g.opts.Rounds*MaxPlayers {
+			g.refill(nil)
 		}
 		g.round = 0
 		g.startRound()
@@ -270,7 +311,7 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 			p.drawn = true
 			if g.other(p).drawn {
 				g.phase = Playing
-				g.deadline = now.Add(RoundSeconds * time.Second)
+				g.deadline = now.Add(g.roundLength())
 			}
 		}
 	case gotIt, forfeit:
@@ -280,7 +321,7 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 		case Lobby:
 			return errPhase
 		case RoundEnd:
-			if g.round >= g.rounds {
+			if g.round >= g.opts.Rounds {
 				g.enterFinal(now)
 			} else {
 				g.startRound()
@@ -293,7 +334,7 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 		g.reset()
 	case "leave":
 		g.remove(p)
-		if g.phase != Lobby {
+		if g.phase != Lobby || len(g.players) == 0 {
 			g.reset()
 		}
 	default:
@@ -301,6 +342,38 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 	}
 	return nil
 }
+
+// setOptions validates the whole request before applying any of it.
+func (g *Game) setOptions(a Action) error {
+	o := g.opts
+	if a.Seconds != nil {
+		if !slices.Contains(RoundLengths, *a.Seconds) {
+			return errSeconds
+		}
+		o.Seconds = *a.Seconds
+	}
+	if a.Hints != nil {
+		o.Hints = *a.Hints
+	}
+	if a.Pool != nil {
+		if _, ok := poolKinds[*a.Pool]; !ok || g.maxRounds(*a.Pool) < MinRounds {
+			return errPool
+		}
+		o.Pool = *a.Pool
+	}
+	most := g.maxRounds(o.Pool)
+	if a.Rounds != nil {
+		if *a.Rounds < MinRounds || *a.Rounds > most {
+			return errRounds
+		}
+		o.Rounds = *a.Rounds
+	}
+	o.Rounds = max(MinRounds, min(o.Rounds, most))
+	g.opts = o
+	return nil
+}
+
+func (g *Game) roundLength() time.Duration { return time.Duration(g.opts.Seconds) * time.Second }
 
 func (g *Game) resolve(p *Player, res string, now time.Time) error {
 	switch g.phase {
@@ -316,7 +389,7 @@ func (g *Game) resolve(p *Player, res string, now time.Time) error {
 	p.resolved = res
 	if res == gotIt {
 		remaining := max(g.deadline.Sub(now), 0)
-		p.gain = 1 + min(2, int(3*remaining/(RoundSeconds*time.Second)))
+		p.gain = 1 + min(2, int(3*remaining/g.roundLength()))
 	}
 	for _, q := range g.players {
 		if q.resolved == "" {
@@ -345,13 +418,10 @@ func (g *Game) startRound() {
 		var free []*Character
 		for pass := 0; len(free) == 0 && pass < 3; pass++ {
 			if pass == 1 {
-				g.used = map[string]bool{}
-				for _, q := range picked {
-					g.used[q.ID] = true
-				}
+				g.refill(picked)
 			}
-			for i := range g.chars {
-				if c := &g.chars[i]; !g.used[c.ID] && !clash(c, pass < 2) {
+			for _, c := range g.pool(g.opts.Pool) {
+				if !g.used[c.ID] && !clash(c, pass < 2) {
 					free = append(free, c)
 				}
 			}
@@ -376,7 +446,7 @@ func (g *Game) endRound() {
 
 func (g *Game) enterFinal(now time.Time) {
 	g.phase = Final
-	e := &HistoryEntry{Finished: now.UTC().Format(time.RFC3339), Rounds: g.rounds, Chars: g.drawn}
+	e := &HistoryEntry{Finished: now.UTC().Format(time.RFC3339), Rounds: g.opts.Rounds, Chars: g.drawn}
 	for _, p := range g.players {
 		e.Players = append(e.Players, HistoryPlayer{p.Name, p.Score})
 	}
@@ -402,7 +472,9 @@ func (g *Game) remove(p *Player) {
 func (g *Game) reset() {
 	g.phase = Lobby
 	g.round = 0
-	g.rounds = min(g.rounds, g.maxRounds())
+	if len(g.players) == 0 {
+		g.opts = defaultOptions()
+	}
 	g.drawn = nil
 	g.deadline = time.Time{}
 	g.finished = nil

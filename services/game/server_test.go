@@ -140,8 +140,19 @@ func TestTwoClientGame(t *testing.T) {
 	b.connect()
 	a.await(func(v View) bool { return v.Other != nil && v.Other.Connected })
 
-	a.act("set_rounds", map[string]any{"rounds": 2})
+	if code, body := a.act("set_options", map[string]any{"rounds": 2, "seconds": 120}); code != 200 || !strings.Contains(string(body), `"options":{"rounds":2,"seconds":120,"hints":true,"pool":"all"}`) {
+		t.Fatalf("set_options: %d %s", code, body)
+	}
+	if v := b.await(func(v View) bool { return v.Options.Seconds == 120 }); v.Options.Rounds != 2 {
+		t.Fatalf("other phone options %+v", v.Options)
+	}
+	if code, body := a.act("set_options", map[string]any{"pool": "elves"}); code != 400 || !strings.Contains(string(body), `"error":"pool"`) {
+		t.Fatalf("bad pool: %d %s", code, body)
+	}
 	a.must("start")
+	if code, body := a.act("set_options", map[string]any{"hints": false}); code != 409 || !strings.Contains(string(body), `"error":"phase"`) {
+		t.Fatalf("set_options mid-game: %d %s", code, body)
+	}
 	a.await(inPhase(Drawing))
 	b.await(inPhase(Drawing))
 	a.must("draw")
