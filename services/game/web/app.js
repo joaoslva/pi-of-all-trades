@@ -107,7 +107,7 @@ const card = (c, ...kids) => {
 const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 // Each letter becomes a slot that keeps its real letter (unpainted) under a cycling rune background, so the line is the final name from the start.
 function startReveal(card, name) {
-  const el = card.querySelector(".sname"), slots = [], ink = getComputedStyle(el).color;
+  const el = card.querySelector(".sname"), slots = [], ink = card.classList.contains("ink-dark") ? "#1a0e05" : "#f3e5c8"; // the card may not be in the DOM yet, so computed style is empty
   const img = [...ABC].map(c => `url("data:image/svg+xml,${encodeURIComponent(runeSvg(c).replace("<svg", `<svg xmlns="http://www.w3.org/2000/svg" color="${ink}"`))}")`);
   el.replaceChildren(...name.split(" ").flatMap((w, i) => [i ? " " : null, h("span", { class: "word" }, [...w].map(ch => {
     const s = h("span", { class: "slot spin" }, ch);

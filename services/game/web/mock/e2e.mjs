@@ -143,6 +143,8 @@ await B.evaluate(() => { document.querySelector(".secret").marked = true; });
 const mid = await B.evaluate(() => [...document.querySelectorAll(".secret .slot")].map(s => [s.classList.contains("spin"), getComputedStyle(s).backgroundImage.includes("svg"), s.textContent]));
 assert.ok(mid.some(m => m[0]) && mid.some(m => !m[0]), JSON.stringify(mid));
 assert.ok(mid.every(([spin, rune]) => spin === rune), "a spinning slot shows a rune, a settled slot only its letter");
+const runeInk = await B.evaluate(() => decodeURIComponent(document.querySelector(".secret .slot.spin")?.style.backgroundImage || ""));
+assert.match(runeInk, /color="#[0-9a-f]{6}"/, "the cycling rune is painted in the card ink, not left black"); ok("cycling runes carry the card ink");
 assert.equal(mid.map(m => m[2]).join(""), "VioletSorrengail");
 assert.equal(await B.locator(".secret .sname").innerText(), "Violet Sorrengail"); ok(`mid-reveal: ${mid.filter(m => !m[0]).length} letters settled, ${mid.filter(m => m[0]).length} runes still turning, all in the name line`);
 const before = await settled(B);
