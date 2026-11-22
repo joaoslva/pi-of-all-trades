@@ -18,25 +18,30 @@ const pairs = [
   ["muted", "bg", T], ["muted", "panel", T], ["muted", "panel-hi", T],
   ["gold", "bg", T], ["gold", "panel", T], ["gold", "panel-hi", T],
   ["on-gold", "gold", T], ["on-gold", "btnTop", T],
-  ["danger-ink", "danger-bg", T], ["danger-ink", "panel", T], ["ok-ink", "bg", T],
+  ["danger-ink", "danger-bg", T], ["danger-ink", "panel", T],
+  // Hall: name on the leather banner, scores and round on the plaques and diamond (low timer and "away" in danger ink), End game tab.
+  ["text", "hide", T], ["danger-ink", "panel-hi", T],
   ["field", "panel", UI], ["field", "bg", UI],
   // Text that sits on the page, not a panel, can land on a background rune stroke.
-  ["text", "rune-ink", T], ["muted", "rune-ink", T], ["gold", "rune-ink", T], ["ok-ink", "rune-ink", T],
+  ["text", "rune-ink", T], ["muted", "rune-ink", T], ["gold", "rune-ink", T],
   // Home: the title is inlaid in the mantel lintel, the join and lobby text sits on the painting's canvas.
   ["gold", "lintel", T], ["gold", "lintel-hi", T], ["muted", "lintel", T], ["muted", "lintel-hi", T],
   ...["canvas", "canvasTop"].flatMap(b => [["text", b, T], ["muted", b, T], ["gold", b, T], ["field", b, UI]]),
   ...["panel", "canvas", "canvasTop", "bg"].flatMap(b => [["text", `btn-${b}`, T], ["gold", `btn-${b}`, T], ["field", `btn-${b}`, UI]]),
 ];
-// Same rule as darkInk in app.js: the ink with the higher ratio.
+// Same rule as darkInk in app.js: the ink with the higher ratio. On the card face the ink carries the kind label, tips, status line, Hint and Hide.
 const chars = JSON.parse(readFileSync(process.argv[3] || fileURLToPath(new URL("../../content/characters.json", import.meta.url)), "utf8"));
-for (const c of new Set([...chars.map(c => c.color || t.stone)])) {
+const faces = [...new Set(chars.map(c => (c.color || t.stone).toLowerCase()))];
+for (const c of faces) {
   t[c] = c;
   pairs.push([ratio(t["on-gold"], c) > ratio(t.text, c) ? "on-gold" : "text", c, T]);
 }
-let bad = 0;
+let bad = 0, low = [99, ""];
 for (const [f, b, min] of pairs) {
   const r = ratio(t[f], t[b]), pass = r >= min;
   if (!pass) bad++;
+  if (min === T && r < low[0]) low = [r, `${f} on ${b}`];
   console.log(`${pass ? "PASS" : "FAIL"}  ${f} on ${b}  ${r.toFixed(2)} (min ${min})`);
 }
+console.log(`${pairs.length} pairs, ${faces.length} card faces from ${chars.length} characters; lowest text ratio ${low[0].toFixed(2)}: ${low[1]}`);
 process.exit(bad ? 1 : 0);

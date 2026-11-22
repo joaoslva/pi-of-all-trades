@@ -25,7 +25,26 @@ const shot = (p, n) => p.screenshot({ path: `${OUT}/${n}.png` });
 const text = p => p.locator("body").innerText();
 const ok = m => console.log("ok  ", m);
 const rgb = hex => `rgb(${[1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
-const cardStyle = (p, sel = ".secret .card") => p.locator(sel).first().evaluate(e => [getComputedStyle(e).backgroundColor, getComputedStyle(e).color]);
+const cardStyle = (p, sel = "#screen > .hall") => p.locator(sel).first().evaluate(e => [getComputedStyle(e).backgroundColor, getComputedStyle(e).color]);
+// The card art: the kind's emblem, then the dark banner carrying the name on top of it, and nothing else (no rune watermark).
+const carts = (p, sel = ".secret .cart") => p.locator(sel).evaluateAll(cs => cs.map(c => {
+  const b = c.querySelector(".banner"), e = c.querySelector(".emblem"), r = b.getBoundingClientRect(), er = e.getBoundingClientRect();
+  const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+  return [[...c.children].map(k => k.getAttribute("class")).join(" + "), getComputedStyle(b).backgroundColor, !!b.querySelector(".sname"),
+    !!hit && b.contains(hit) && er.top < r.top && er.bottom > r.bottom, c.querySelectorAll("svg.rune, text").length];
+}));
+const art = (emblem) => [`emblem ${emblem} + banner`, rgb("#140d18"), true, true, 0];
+// Every name stays inside its banner at 320 and 360 wide with the big font; it wraps on spaces, never runs under the swallowtail.
+const namesFit = async (p, label) => {
+  const back = p.viewportSize(), tag = await p.addStyleTag({ content: BIG });
+  for (const width of [360, 320]) {
+    await p.setViewportSize({ width, height: 640 });
+    const bad = await p.evaluate(() => [...document.querySelectorAll(".sname")].filter(n => n.scrollWidth > n.clientWidth || n.getBoundingClientRect().right > n.parentElement.getBoundingClientRect().right).map(n => n.textContent));
+    assert.deepEqual(bad, [], `${label} ${width}px big font: names overflow their banner`);
+  }
+  await shot(p, `names-${label.replace(/\W+/g, "-")}-320x640-big`); await tag.evaluate(t => t.remove()); await p.setViewportSize(back);
+  ok(`${label}: every name fits its banner at 360 and 320 with the big font`);
+};
 const settled = p => p.locator(".secret .slot:not(.spin)").count();
 const timers = p => p.evaluate(() => window.liveTimers());
 const fits = async (p, label, vertical) => {
@@ -98,7 +117,7 @@ ok(`join: ${fire.length} running animations, all in the fireplace, animating onl
 await setHidden(A, true); assert.ok((await anims(A)).every(a => a.state === "paused")); ok("hidden tab: fire paused");
 await setHidden(A, false); assert.ok((await anims(A)).every(a => a.state === "running")); ok("visible again: fire running");
 await A.fill("input", "Ana"); await A.click("text=Join");
-await A.waitForSelector("text=Waiting for a second rider"); await shot(A, "02a-lobby-alone"); await fitsPhones(A, "lobby one player", true);
+await A.waitForSelector("text=Waiting for a second rider"); await shot(A, "02a-lobby-alone"); assert.ok(!(await text(A)).includes("null"), "no stray null on screen"); await fitsPhones(A, "lobby one player", true);
 await B.fill("input", "Bo"); await B.click("text=Join");
 await A.waitForSelector("text=Bo"); await shot(A, "02-lobby"); await fitsPhones(A, "lobby", true);
 assert.deepEqual(await scene(A), [false, false]); assert.equal(await end(A).count(), 0); ok("lobby: no title, no fireplace, no End game");
@@ -133,10 +152,11 @@ assert.ok((await anims(A)).every(a => !a.fire)); ok("drawing: the fireplace is g
 
 // 4: B (no clip) reveals by runes; A (clip) draws mid-animation and must not restart it
 await B.click("text=Draw your character");
-await B.waitForSelector(".secret .card.revealing"); ok("no clip: B gets the rune reveal");
+await B.waitForSelector(".secret.revealing"); ok("no clip: B gets the rune reveal");
 assert.equal(await B.locator(".secret .sname").innerText(), "Violet Sorrengail"); ok("name is real text from the start");
 assert.equal(await B.locator(".secret .sname .slot").count(), 16); ok("one line of 16 letter slots, in the name itself");
 assert.deepEqual(await cardStyle(B), [rgb("#1F2421"), rgb("#f3e5c8")]); ok("Violet card #1F2421 with light ink");
+assert.deepEqual(await carts(B), [art("blades")]); ok("rider: crossed blades behind the dark banner, name on the banner, no rune watermark");
 assert.ok(await B.locator(".hints").isHidden()); ok("no Hint while drawing");
 await B.waitForFunction(() => document.querySelectorAll(".secret .slot:not(.spin)").length >= 2);
 await B.evaluate(() => { document.querySelector(".secret").marked = true; });
@@ -152,32 +172,33 @@ await shot(B, "05-reveal-runes-mid");
 await A.click("text=Draw your character");
 await A.waitForSelector(".stage video"); ok("clip present: A plays a <video>");
 assert.equal(await A.locator(".stage video").evaluate(v => v.muted), true); ok("video is muted");
+assert.deepEqual(await carts(A), [art("claws")]); ok("dragon: claw gouges behind the banner");
 await shot(A, "06-reveal-clip");
 await B.waitForSelector(".time");
-assert.ok(await B.evaluate(() => document.querySelector(".secret").marked)); assert.ok(await B.locator(".card.revealing").count());
+assert.ok(await B.evaluate(() => document.querySelector(".secret").marked)); assert.ok(await B.locator(".secret.revealing").count());
 assert.ok((await settled(B)) >= before); ok(`opponent's draw mid-animation: same card node, still revealing, settled runes ${before} -> ${await settled(B)}`);
 await B.click("text=Hint (3 left)");
 assert.match((await B.locator(".tips li").allInnerTexts()).join("|"), /^Violet vague tip\.[^|]*$/); await B.waitForSelector("text=Hint (2 left)");
-assert.ok(await B.locator(".card.revealing").count()); ok("Hint works during the animation, vague tip first");
+assert.ok(await B.locator(".secret.revealing").count()); ok("Hint works during the animation, vague tip first");
 assert.ok(!(await text(A)).includes("Violet vague tip")); ok("A never sees B's tips");
-await B.waitForSelector(".secret .card:not(.revealing)", { timeout: 4000 });
+await B.waitForSelector(".secret:not(.revealing)", { timeout: 4000 });
 assert.equal(await B.locator(".secret .slot").count(), 0); assert.equal(await timers(B), 1);
 assert.equal(await B.locator(".secret .sname").innerText(), "Violet Sorrengail"); ok("reveal settles to the plain name, no rune left, only the clock interval left");
 await B.reload(); await B.waitForSelector(".time");
-assert.equal(await B.locator(".card.revealing").count(), 0); assert.equal(await B.locator(".slot").count(), 0);
+assert.equal(await B.locator(".secret.revealing").count(), 0); assert.equal(await B.locator(".slot").count(), 0);
 assert.equal(await B.locator(".tips li").count(), 1); await B.waitForSelector("text=Hint (2 left)"); ok("reload: settled card, no animation, revealed tip kept");
 await B.click("text=Hint (2 left)"); await B.click("text=Hint (1 left)");
 assert.equal(await B.locator(".tips li").count(), 3); assert.equal(await B.locator("button.hint:visible").count(), 0); ok("all tips shown, Hint gone");
 await fitsPhones(B, "playing, three tips open", true);
 {
   await B.setViewportSize({ width: 360, height: 560 }); const tag = await B.addStyleTag({ content: BIG });
-  const [sh, ch] = await B.locator(".sbody").evaluate(e => [e.scrollHeight, e.clientHeight]);
+  const [sh, ch] = await B.locator(".well").evaluate(e => [e.scrollHeight, e.clientHeight]);
   assert.ok(sh > ch, `card and tips must overflow for this check to mean anything: ${sh} <= ${ch}`);
-  const seen = new Set(), box = await B.locator(".sbody").boundingBox();
+  const seen = new Set(), box = await B.locator(".well").boundingBox();
   await B.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   for (let i = 0; i < 30 && seen.size < 4; i++) {
     const vis = await B.evaluate(() => [...document.querySelectorAll(".tips li")].map(li => {
-      const r = li.getBoundingClientRect(), s = li.closest(".secret").getBoundingClientRect(), y = r.y + r.height / 2;
+      const r = li.getBoundingClientRect(), s = li.closest(".well").getBoundingClientRect(), y = r.y + r.height / 2;
       const hit = document.elementFromPoint(r.x + r.width / 2, y);
       return [y > s.top && y < s.bottom && !!hit && li.contains(hit), r.bottom <= s.bottom];
     }));
@@ -186,7 +207,7 @@ await fitsPhones(B, "playing, three tips open", true);
   }
   assert.equal(seen.size, 4, `tips (and the end of the last) reached by scrolling: ${[...seen]}`);
   await shot(B, "07-playing-B-tips-scrolled-360x560-big");
-  const fixed = await B.evaluate(() => ["#timer", "#screen .row button"].flatMap(s => [...document.querySelectorAll(s)]).map(e => {
+  const fixed = await B.evaluate(() => ["#timer", "#screen .plinth button"].flatMap(s => [...document.querySelectorAll(s)]).map(e => {
     const r = e.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
     return [e.textContent, r.top >= 0 && r.bottom <= innerHeight && !!hit && e.contains(hit)];
   }));
@@ -203,7 +224,6 @@ await B.setViewportSize({ width: 360, height: 640 }); await shot(B, "07-playing-
 const tA = await text(A), tB = await text(B);
 assert.ok(tA.includes("Tairn") && !tA.includes("Violet Sorrengail")); assert.ok(tB.includes("Violet Sorrengail") && !tB.includes("Tairn"));
 ok("playing: A shows only Tairn, B shows only Violet Sorrengail");
-await A.click(".secret > button"); assert.ok(await A.locator(".secret .card").isHidden()); ok("Hide hides the card"); await shot(A, "08-secret-collapsed"); await A.click(".secret > button");
 
 // 2: fit
 await fits(A, "playing 412x915", true);
@@ -211,14 +231,27 @@ await A.setViewportSize({ width: 360, height: 640 }); await fits(A, "playing 360
 await A.setViewportSize({ width: 1366, height: 768 }); await fits(A, "playing 1366x768 (sideways only)", false); await shot(A, "10-playing-desktop");
 await A.setViewportSize({ width: 412, height: 915 });
 
+// Hide on B: name, emblem, kind and tips blank, the card face stays, and it holds through A's Got it
+const blank = p => p.evaluate(() => [".secret .sname", ".secret .emblem", ".secret .kind", ".tips"].map(s => getComputedStyle(document.querySelector(s)).visibility));
+await B.click("button.conceal");
+assert.deepEqual(await blank(B), ["hidden", "hidden", "hidden", "hidden"]);
+assert.deepEqual(await cardStyle(B), [rgb("#1F2421"), rgb("#f3e5c8")]);
+assert.ok(!(await text(B)).includes("Violet")); assert.equal(await B.locator("button.conceal").textContent(), "Show"); ok("Hide blanks name, emblem, kind and tips; the card face stays");
+await shot(B, "08-hide-on");
+
 // A got it, B forfeits
 await A.click("text=Got it"); await A.waitForSelector("text=You got it"); await shot(A, "11-playing-resolved");
-await B.waitForSelector("text=Ana got it"); await B.click("text=Forfeit");
+await B.waitForSelector("text=Ana got it");
+assert.deepEqual(await blank(B), ["hidden", "hidden", "hidden", "hidden"]); ok("Hide survives a re-render from the other phone's event");
+await B.click("button.conceal"); assert.deepEqual(await blank(B), ["visible", "visible", "visible", "visible"]); ok("a second tap shows it again");
+await B.click("text=Forfeit");
 await A.waitForSelector("text=Next round"); await shot(A, "12-roundEnd-A"); await shot(B, "12-roundEnd-B"); await fitsPhones(A, "roundEnd", true);
 assert.ok((await text(A)).includes("Violet Sorrengail")); ok("roundEnd reveals the other secret");
 assert.equal(await end(A).innerText(), "End game"); ok("roundEnd: End game shown");
 assert.equal(await B.locator(".tips, .hint").count(), 0); ok("no tips at roundEnd");
-assert.deepEqual(await cardStyle(A, ".verdict .card"), [rgb("#1F2421"), rgb("#f3e5c8")]); ok("roundEnd cards carry the reveal colour");
+assert.deepEqual(await cardStyle(A, ".verdict .mini"), [rgb("#1F2421"), rgb("#f3e5c8")]); ok("roundEnd cards carry the reveal colour");
+assert.deepEqual(await carts(A, ".verdict .cart"), [art("blades"), art("claws")]); ok("roundEnd minis: the same emblem and banner per kind");
+await namesFit(A, "roundEnd");
 assert.deepEqual([await timers(A), await timers(B)], [1, 1]); ok("roundEnd: no reveal timer left on either phone");
 
 // refusal for a third phone
@@ -228,29 +261,40 @@ await C.waitForSelector(".refused"); await shot(C, "13-refused"); await fitsPhon
 // round 2: B reduced motion, A animates, then A reloads mid-round
 await B.click("text=Next round"); await A.waitForSelector("text=Draw your character");
 await B.emulateMedia({ reducedMotion: "reduce" });
-await B.click("text=Draw your character"); await B.waitForSelector(".secret .card");
-assert.equal(await B.locator(".card.revealing, .slot").count(), 0); assert.equal(await timers(B), 1); ok("reduced motion: settled at once, no timer");
+await B.click("text=Draw your character"); await B.waitForSelector(".secret");
+assert.equal(await B.locator(".secret.revealing, .slot").count(), 0); assert.equal(await timers(B), 1); ok("reduced motion: settled at once, no timer");
 assert.equal((await anims(B)).length, 0); ok("reduced motion: no embers or other animation while playing");
 await B.emulateMedia({ reducedMotion: "no-preference" });
-await A.click("text=Draw your character"); await A.waitForSelector(".card.revealing");
+await A.click("text=Draw your character"); await A.waitForSelector(".secret.revealing");
 assert.deepEqual(await cardStyle(A), [rgb("#FFD400"), rgb("#1a0e05")]); ok("Andarna card #FFD400 with dark ink");
 await A.waitForSelector(".time"); await shot(A, "13b-andarna-mid");
 await A.reload(); await A.waitForSelector(".time");
-assert.equal(await A.locator(".card.revealing, .slot").count(), 0); ok("rejoin: reload restored the playing screen, settled card");
+assert.equal(await A.locator(".secret.revealing, .slot").count(), 0); ok("rejoin: reload restored the playing screen, settled card");
 assert.ok(await A.evaluate(() => { try { return !!localStorage.getItem("gameToken"); } catch { return false; } }));
 await A.click("text=Got it"); await B.click("text=Got it");
 await A.waitForSelector("text=Next round"); await A.click("text=Next round");
 
 // round 3: timeout; B holds an "other" with a long name
 await A.click("text=Draw your character"); await B.click("text=Draw your character");
-await A.waitForSelector(".time"); await B.waitForSelector(".card.revealing");
+await A.waitForSelector(".time"); await B.waitForSelector(".secret.revealing");
 assert.deepEqual(await cardStyle(B), [rgb("#3b3540"), rgb("#f3e5c8")]); ok("other: neutral stone card, light ink");
+assert.deepEqual(await carts(B), [art("slab")]); ok("other: the plain cracked slab behind the banner");
 await B.setViewportSize({ width: 360, height: 640 }); await shot(B, "13c-long-name-mid-360x640"); await fitsPhones(B, "long name with Hint", true);
-await B.waitForSelector(".secret .card:not(.revealing)", { timeout: 4000 }); await shot(B, "13d-long-name-settled-360x640"); await B.setViewportSize({ width: 412, height: 915 });
+await B.waitForSelector(".secret:not(.revealing)", { timeout: 4000 }); await shot(B, "13d-long-name-settled-360x640"); await B.setViewportSize({ width: 412, height: 915 });
+{
+  const tag = await B.addStyleTag({ content: BIG });
+  for (const width of [360, 320]) {
+    await B.setViewportSize({ width, height: 640 });
+    const [sw, cw, lines] = await B.locator(".secret .banner").evaluate(b => { const n = b.querySelector(".sname"); return [b.scrollWidth, b.clientWidth, Math.round(n.clientHeight / parseFloat(getComputedStyle(n).lineHeight))]; });
+    assert.ok(sw <= cw && lines >= 2, `${width}px: banner ${sw}>${cw} or ${lines} line(s)`);
+  }
+  await shot(B, "13e-long-name-320x640-big"); await tag.evaluate(t => t.remove()); await B.setViewportSize({ width: 412, height: 915 });
+  ok("a 21-letter name wraps on spaces inside the banner at 320 and 360 with the big font");
+}
 await A.waitForSelector("text=Back to lobby", { timeout: 15000 }); ok("timeout: nobody pressed, round ended by the clock");
 assert.match(await A.locator(".verdict").innerText(), /\+0[\s\S]*\+0/); ok("timeout gains are +0 and +0");
 await shot(A, "14-final-timeout");
-await shot(A, "15-final-A"); await shot(B, "15-final-B"); await fitsPhones(A, "final", true);
+await shot(A, "15-final-A"); await shot(B, "15-final-B"); await namesFit(B, "final"); await fitsPhones(A, "final", true);
 assert.equal(await end(A).count(), 0); ok("final: no End game");
 await B.click("text=Back to lobby"); await A.waitForSelector("text=Start"); 
 await A.click("text=Past games"); await A.waitForSelector(".hist"); await shot(A, "16-history-with-game"); await fitsPhones(A, "history with a game", false);

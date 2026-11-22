@@ -75,39 +75,48 @@ function leave() {
 const remaining = () => view.deadline - (view.serverNow + Date.now() - receivedAt);
 const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
-function renderBar(v) {
-  const bar = $("bar");
-  const show = v && v.phase !== "lobby" && v.other;
-  bar.hidden = !show;
-  if (!show) return;
-  const side = (p, cls) => h("div", { class: `who ${cls}` }, h("b", {}, p.name), h("span", {}, String(p.score)),
-    p.connected === false ? h("div", { class: "away" }, "away") : null);
-  bar.replaceChildren(
-    side(v.you, "l"),
-    h("div", { class: "mid" }, `Round ${v.round} / ${v.options.rounds}`,
-      v.phase === "playing" ? h("span", { class: "time", id: "timer", "aria-live": "off" }, fmt(remaining())) : null),
-    side(v.other, "r"));
-}
-
 const lum = hex => {
   const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(x => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 };
 // Ink is whichever of --on-gold and --text contrasts more with the card; mock/check-contrast.mjs runs this rule over every real colour.
 const darkInk = c => (lum(c) + 0.05) ** 2 > (lum("#1a0e05") + 0.05) * (lum("#f3e5c8") + 0.05);
-const FRAME = '<svg class="frame" viewBox="0 0 1080 1512" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-  + '<path d="M481 60H204L60 204V651L165 756L60 861V1308L204 1452H876L1020 1308V861L915 756L1020 651V204L876 60H599M483 60L603 180L540 244L476 180L596 60M56 704L108 756L56 808M1024 704L972 756L1024 808"/>'
-  + '<path d="M540 138L582 180L540 222L498 180Z" fill="currentColor" stroke="none"/></svg>';
-const card = (c, ...kids) => {
-  const el = h("div", { class: `card${c.color && darkInk(c.color) ? " ink-dark" : ""}`, style: c.color ? `--c:${c.color}` : null }, ...kids);
-  el.insertAdjacentHTML("afterbegin", FRAME);
-  return el;
+const svgs = html => { const t = document.createElement("template"); t.innerHTML = html; return [...t.content.childNodes]; };
+const KNOTS = ["a", "b", "c", "d"].map(k => `<svg class="kn ${k}" aria-hidden="true"><use href="#kn"/></svg>`).join("");
+// A <use> takes currentColor from where it is placed, so the band follows the card ink.
+const BAND = '<svg class="band" aria-hidden="true"><use href="#rb"/><use href="#rb" x="312"/></svg>';
+const BLADE = '<path d="M100 18l8 14v98h-16V32zM100 32v96M78 132h44M100 136v26"/><circle cx="100" cy="168" r="6" fill="currentColor"/>';
+// Drawn in the ink at low opacity behind the banner, so no text ever sits on it.
+const EMBLEM = {
+  dragon: '<g transform="rotate(24 100 100)" fill="currentColor" stroke="none"><use href="#claw"/><use href="#claw" x="38" y="-8"/><use href="#claw" x="76"/></g>',
+  rider: `<circle cx="100" cy="100" r="76" stroke-width="2.5"/><circle cx="100" cy="100" r="66" stroke-width="1.5"/><g stroke-width="3" transform="rotate(38 100 100)">${BLADE}</g><g stroke-width="3" transform="rotate(-38 100 100)">${BLADE}</g>`,
+  other: '<path d="M44 14h112l18 18v162H26V32z" fill="currentColor" fill-opacity=".12" stroke-width="2"/><path d="M33 22h134v172H33z"/><path d="M124 14l-8 22 6 14-10 18M44 194l10-16-4-12" stroke-width="1.5"/>',
 };
+const EMBLEM_CLS = { dragon: "claws", rider: "blades", other: "slab" };
+const emblem = kind => svgs(`<svg class="emblem ${EMBLEM_CLS[kind] || "slab"}" viewBox="0 0 200 200" fill="none" stroke="currentColor" aria-hidden="true">${EMBLEM[kind] || EMBLEM.other}</svg>`);
+const nameEl = name => h("div", { class: "sname" }, name.split(" ").flatMap((w, i) => [i ? " " : null, h("span", { class: "word" }, w)]));
+// The kind's emblem behind a dark banner that carries the name.
+const cart = (c, ...before) => h("div", { class: "cart" }, ...before, emblem(c.kind), h("div", { class: "banner" }, nameEl(c.name)));
+const inkCls = c => (c.color && darkInk(c.color) ? " ink-dark" : "");
+const face = c => (c.color ? `--c:${c.color}` : null);
+
+const endable = v => v.phase === "drawing" || v.phase === "playing" || v.phase === "roundEnd";
+// The whole game screen is one carved slab: the character's colour while a secret is held, dark stone otherwise.
+function hall(v, c, dia, body, foot) {
+  const plaque = (p, side) => h("div", { class: `plaque ${side}` }, h("small", {}, p.name),
+    h("b", {}, String(p.score), p.connected === false ? h("span", { class: "away" }, " away") : null));
+  return h("div", { class: c ? `hall${inkCls(c)}` : "hall stone", style: c ? face(c) : null },
+    svgs(KNOTS), plaque(v.you, "l"), plaque(v.other, "r"), h("div", { class: "dia" }, h("small", {}, dia[0]), dia[1]),
+    h("div", { class: "crest" }), svgs(BAND), body, svgs(BAND), foot, endable(v) ? endGame() : null);
+}
+const roundDia = v => v.phase === "playing"
+  ? [`Round ${v.round}/${v.options.rounds}`, h("b", { id: "timer", class: "time" }, fmt(remaining()))]
+  : ["Round", h("b", {}, `${v.round}/${v.options.rounds}`)];
 
 const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 // Each letter becomes a slot that keeps its real letter (unpainted) under a cycling rune background, so the line is the final name from the start.
-function startReveal(card, name) {
-  const el = card.querySelector(".sname"), slots = [], ink = card.classList.contains("ink-dark") ? "#1a0e05" : "#f3e5c8"; // the card may not be in the DOM yet, so computed style is empty
+function startReveal(node, name) {
+  const el = node.querySelector(".sname"), slots = [], ink = "#f3e5c8"; // the banner is always dark leather, so the ink is always --text
   const img = [...ABC].map(c => `url("data:image/svg+xml,${encodeURIComponent(runeSvg(c).replace("<svg", `<svg xmlns="http://www.w3.org/2000/svg" color="${ink}"`))}")`);
   el.replaceChildren(...name.split(" ").flatMap((w, i) => [i ? " " : null, h("span", { class: "word" }, [...w].map(ch => {
     const s = h("span", { class: "slot spin" }, ch);
@@ -115,7 +124,7 @@ function startReveal(card, name) {
     return s;
   }))]).filter(Boolean));
   const n = slots.length, total = Math.min(3500, 1600 + n * 90), step = (total - 900) / n, t0 = performance.now();
-  card.classList.add("revealing");
+  node.classList.add("revealing");
   const tick = () => {
     const t = performance.now() - t0;
     slots.forEach(([s, ch], i) => {
@@ -130,12 +139,10 @@ function startReveal(card, name) {
 }
 function stopReveal() {
   clearInterval(revealTimer); revealTimer = 0;
-  const c = secretNode && secretNode.querySelector(".card");
-  if (!c || !c.classList.contains("revealing")) return;
-  c.classList.remove("revealing");
-  const sn = c.querySelector(".sname");
-  sn.textContent = sn.textContent; // every slot holds its real letter, so this leaves the plain name
-
+  if (!secretNode || !secretNode.classList.contains("revealing")) return;
+  secretNode.classList.remove("revealing");
+  const sn = secretNode.querySelector(".sname");
+  sn.replaceWith(nameEl(sn.textContent)); // every slot holds its real letter, so this leaves the plain name
 }
 
 function hints(tips, key) {
@@ -156,32 +163,32 @@ function hints(tips, key) {
   return h("div", { class: "hints" }, list, more);
 }
 
+// Built once per drawn secret and reused across renders, so the reveal, the open tips and Hide outlive every event.
 function secretCard(v) {
   const s = v.secret, key = `${v.round}:${s.name}`;
   if (!secretNode || secretKey !== key) {
     stopReveal();
     secretKey = key;
-    let face = null;
+    let stage = null;
     if (s.clip) {
-      const stage = h("div", { class: "stage" });
+      stage = h("div", { class: "stage" });
       const fallback = () => stage.remove();
       const video = h("video", { src: s.clip, poster: s.poster, muted: true, playsinline: true, autoplay: true, "aria-hidden": "true" });
       video.muted = true; // the attribute alone is not honoured for autoplay in every browser
       video.addEventListener("ended", () => s.poster ? stage.replaceChildren(h("img", { src: s.poster, alt: "" })) : fallback());
       video.addEventListener("error", fallback);
       stage.append(video);
-      face = stage;
     }
-    const front = card(s, h("div", { class: "skind" }, s.kind), face, h("div", { class: "sname" }, s.name));
-    const body = h("div", { class: "sbody" }, front, s.tips ? hints(s.tips, key) : null);
-    const toggle = h("button", { "aria-expanded": "true", onclick: () => {
-      const c = secretNode.classList.toggle("collapsed");
-      toggle.setAttribute("aria-expanded", String(!c));
-      toggle.lastChild.textContent = c ? "show" : "hide";
-    } }, h("span", {}, "Your secret"), h("span", {}, "hide"));
-    secretNode = h("div", { class: "secret" }, toggle, body);
-    // Animate only a draw this page saw happen: a reload mid-round shows the settled card.
-    if (!s.clip && armedRound === v.round && !matchMedia("(prefers-reduced-motion: reduce)").matches) startReveal(front, s.name);
+    // Hide blanks the secret for a glance over the shoulder; the card face stays.
+    const hide = h("button", { class: "conceal", "aria-pressed": "false", onclick: () => {
+      const on = secretNode.classList.toggle("concealed");
+      hide.setAttribute("aria-pressed", String(on));
+      hide.textContent = on ? "Show" : "Hide";
+    } }, "Hide");
+    secretNode = h("div", { class: "secret" }, h("div", { class: "kindrow" }, h("div", { class: "kind" }, s.kind), hide),
+      h("div", { class: "well" }, stage, cart(s), s.tips ? hints(s.tips, key) : null));
+    // Animate only a draw this page saw happen: a reload mid-round shows the settled name.
+    if (!s.clip && armedRound === v.round && !matchMedia("(prefers-reduced-motion: reduce)").matches) startReveal(secretNode, s.name);
   }
   const hb = secretNode.querySelector(".hints");
   if (hb) hb.hidden = v.phase !== "playing";
@@ -191,15 +198,18 @@ function secretCard(v) {
 const btn = (label, onclick, cls = "", extra = {}) => h("button", { class: cls, onclick, ...extra }, label);
 const panel = (...kids) => h("div", { class: "panel" }, ...kids);
 // Two taps on purpose: the first arms it for 4 s, only the second ends the game for both phones.
-const endGame = () => h("button", { class: "link end", onclick: () => {
+const endGame = () => h("button", { class: "end", onclick: () => {
   if (endArmed) { clearTimeout(endArmed); endArmed = 0; act("end_game"); return; }
   endArmed = setTimeout(() => { endArmed = 0; render(view); }, 4000);
   render(view);
 } }, endArmed ? "Really end?" : "End game");
 
+const plinth = (...kids) => h("div", { class: "plinth" }, ...kids);
 const reveals = v => h("div", { class: "verdict" },
   [[v.reveal.yourGuess, "You guessed", v.gain.you], [v.reveal.theirGuess, `${v.other.name} guessed`, v.gain.other]].map(([c, label, gain]) =>
-    panel(h("small", {}, label), card(c, h("div", { class: "skind" }, c.kind), h("strong", { class: "sname" }, c.name)), h("p", {}, `+${gain}`))));
+    h("figure", {}, h("figcaption", {}, label),
+      h("div", { class: `hall mini${inkCls(c)}`, style: face(c) }, svgs(KNOTS), h("div", { class: "kind" }, c.kind), cart(c)),
+      h("p", { class: "pts" }, `+${gain}`, h("small", {}, "points")))));
 
 const screens = {
   join() {
@@ -242,32 +252,26 @@ const screens = {
   },
   drawing(v) {
     if (!v.drawn.you) armedRound = v.round;
-    return [
-      v.drawn.you ? secretCard(v) : panel(h("h2", {}, "A new round"), h("p", { class: "muted" }, "Your secret is waiting. Keep it from the other player."),
-        btn("Draw your character", () => act("draw"), "primary big")),
-      h("p", { class: "status" }, v.drawn.other ? `${v.other.name} has drawn.` : `Waiting for ${v.other.name} to draw...`),
-    ];
+    const st = h("p", { class: "st" }, v.drawn.other ? `${v.other.name} has drawn.` : `Waiting for ${v.other.name} to draw...`);
+    return v.drawn.you ? hall(v, v.secret, roundDia(v), secretCard(v), plinth(st))
+      : hall(v, null, roundDia(v), h("div", { class: "well" }, h("h2", { class: "head" }, "A new round"),
+        h("p", { class: "sub" }, "Your secret is waiting. Keep it from the other player."), st),
+      plinth(btn("Draw your character", () => act("draw"), "primary")));
   },
   playing(v) {
-    const done = v.resolved.you;
-    const them = v.resolved.other;
-    return [
-      secretCard(v),
-      h("p", { class: `status ${them === "got_it" ? "ok" : ""}` },
-        them === "got_it" ? `${v.other.name} got it.` : them === "forfeit" ? `${v.other.name} gave up.` : `${v.other.name} is still guessing...`),
-      h("div", { class: "spacer" }),
-      done ? h("p", { class: "status ok" }, done === "got_it" ? "You got it. Waiting for the round to end..." : "You forfeited. Waiting for the round to end...")
-        : h("div", { class: "row" }, btn("Got it", () => act("got_it"), "primary big"), btn("Forfeit", () => act("forfeit"), "big")),
-    ];
+    const done = v.resolved.you, them = v.resolved.other;
+    return hall(v, v.secret, roundDia(v), [secretCard(v),
+      h("p", { class: "st" }, them === "got_it" ? `${v.other.name} got it.` : them === "forfeit" ? `${v.other.name} gave up.` : `${v.other.name} is still guessing...`)],
+    plinth(done ? h("p", {}, done === "got_it" ? "You got it. Waiting for the round to end..." : "You forfeited. Waiting for the round to end...")
+      : [btn("Got it", () => act("got_it"), "primary"), btn("Forfeit", () => act("forfeit"))]));
   },
-  roundEnd: v => [reveals(v), btn("Next round", () => act("next"), "primary big")],
+  roundEnd: v => hall(v, null, roundDia(v), h("div", { class: "well" }, h("h2", { class: "head" }, `Round ${v.round} ends`), reveals(v)),
+    plinth(btn("Next round", () => act("next"), "primary"))),
   final(v) {
     const f = v.final;
-    return [
-      reveals(v),
-      panel(h("h2", {}, f.tie ? "A tie" : `${f.winner} wins`), h("p", {}, `${v.you.name} ${v.you.score} - ${v.other.score} ${v.other.name}`)),
-      btn("Back to lobby", () => act("back_to_lobby"), "primary big"),
-    ];
+    return hall(v, null, ["Final", h("b", {}, `${v.round}/${v.options.rounds}`)], h("div", { class: "well" },
+      h("h2", { class: "head big" }, f.tie ? "A tie" : `${f.winner} wins`), h("p", { class: "sub" }, `${v.you.name} ${v.you.score} - ${v.other.score} ${v.other.name}`), reveals(v)),
+    plinth(btn("Back to lobby", () => act("back_to_lobby"), "primary")));
   },
 };
 
@@ -280,11 +284,9 @@ async function toggleHistory() {
 function render(v) {
   document.body.classList.toggle("home", !v || v.phase === "lobby");
   document.body.classList.toggle("scene", !v);
-  renderBar(v);
   const screen = $("screen");
-  const endable = !!v && (v.phase === "drawing" || v.phase === "playing" || v.phase === "roundEnd");
   if (!v || !(v.phase === "drawing" || v.phase === "playing")) { stopReveal(); secretNode = null; secretKey = ""; }
-  if (!endable) { clearTimeout(endArmed); endArmed = 0; }
+  if (!v || !endable(v)) { clearTimeout(endArmed); endArmed = 0; }
   if (refusal) {
     screen.replaceChildren(h("div", { class: "panel refused" }, h("h2", {}, "Refused"), h("p", {}, refusal),
       btn("Back", () => { refusal = null; render(view); }, "big")));
@@ -293,7 +295,7 @@ function render(v) {
   if (!v) { screen.replaceChildren(screens.join()); return; }
   if (v.phase !== "lobby") showSettings = false;
   const out = screens[showSettings ? "settings" : v.phase](v);
-  screen.replaceChildren(...[endable ? endGame() : null, out].flat().filter(Boolean));
+  screen.replaceChildren(...[out].flat().filter(Boolean));
 }
 
 setInterval(() => {
@@ -315,6 +317,28 @@ setInterval(() => {
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" fill="none" stroke="${ink}" stroke-width="4">${g}</svg>`;
   document.body.style.setProperty("--runes", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+})();
+
+// The hall frame is one 60px tile of nested octagons, 9-sliced by border-image so it fits any size at 1:1 (or 1:2 on the minis).
+(function hallArt() {
+  const oct = d => { const a = d, b = 60 - d, c = 16 - .586 * d; return [[a + c, a], [b - c, a], [b, a + c], [b, b - c], [b - c, b], [a + c, b], [a, b - c], [a, a + c]]; };
+  const P = p => "M" + p.map(v => v.map(n => +n.toFixed(2)).join(" ")).join("L");
+  const ln = (d, col, w, part) => { const o = oct(d); return `<path fill="none" stroke="${col}" stroke-width="${w}" d="${part === 1 ? P([o[6], o[7], o[0], o[1]]) : part === 0 ? P([o[2], o[3], o[4], o[5]]) : P(o) + "Z"}"/>`; };
+  const ring = (a, b, f) => `<path fill-rule="evenodd" fill="${f}" d="${P(oct(a))}Z${P(oct(b))}Z"/>`;
+  const dark = "#0a070b", lit = "#7d6c5f", groove = "#1c1419", lip = "#5f504a";
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">' + ring(0, 13, "#3b3238") + ring(13, 19.5, "#150e16")
+    + ln(.75, dark, 1.5) + ln(2.4, lit, 1.2, 1) + ln(2.4, groove, 1.2, 0)
+    + ln(7, groove, 1, 1) + ln(8, lip, 1, 1) + ln(7, lip, 1, 0) + ln(8, groove, 1, 0)
+    + ln(12.4, lip, 1.2, 0) + ln(15.8, "#c9a35a", 1.6) + ln(19.5, dark, 1)
+    + ln(20.6, "rgba(0,0,0,.45)", 1.8, 1) + ln(20.6, "rgba(255,255,255,.22)", 1.8, 0) + "</svg>";
+  document.documentElement.style.setProperty("--frame", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+  // Corner knot: strands drawn dark-then-gold one after another, so a later strand passes over an earlier one.
+  const strand = d => `<path d="${d}" stroke="#0a070b" stroke-width="5"/><path d="${d}" stroke="#d8ad5a" stroke-width="2"/>`;
+  const knot = ["M9 40V18L18 9H40", "M16 5L27 16L16 27L5 16Z", "M9 24V18L12 15", "M3 36V12L12 3H36M30 0L36 3L30 6M0 30L3 36L6 30"].map(strand).join("");
+  const band = [..."TAIRNSGEYLBODHMPUWXCFJKQVZ"].map((ch, i) => `<path transform="translate(${i * 12 + 1.5} 2) scale(.16)" d="${RUNES[ch]}"/>`).join("");
+  $("defs").innerHTML = `<symbol id="kn" viewBox="0 0 40 40"><g fill="none">${knot}<path d="M16 12L20 16L16 20L12 16Z" fill="#d8ad5a"/></g></symbol>`
+    + `<g id="rb" fill="none" stroke="currentColor"><path d="M0 .5H312M0 13.5H312"/><g stroke-width="7">${band}</g></g>`
+    + '<path id="claw" d="M58 18c14 50 16 110 2 166c26-56 24-116-2-166z"/>';
 })();
 
 // Staggered rows of jittered stones in a 160x120 tile; a row's first stone is drawn again past the right edge so the tile wraps.

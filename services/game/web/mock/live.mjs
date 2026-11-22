@@ -39,15 +39,15 @@ ok(`settings on A reach B's lobby: "${want}"`);
 await A.click("text=Start");
 
 for (let round = 1; round <= ROUNDS; round++) {
-  await A.click("text=Draw your character"); await A.waitForSelector(".secret .card");
+  await A.click("text=Draw your character"); await A.waitForSelector(".secret");
   await A.screenshot({ path: `${OUT}/r${round}-A-mid.png` });
   await B.click("text=Draw your character");
   await A.waitForSelector("text=Got it"); await B.waitForSelector("text=Got it");
   const sa = await secretOf(A), sb = await secretOf(B);
-  await A.waitForSelector(".secret .card:not(.revealing)"); await B.waitForSelector(".secret .card:not(.revealing)");
+  await A.waitForSelector(".secret:not(.revealing)"); await B.waitForSelector(".secret:not(.revealing)");
   await shots(A, `r${round}-A-${sa}`); await shots(B, `r${round}-B-${sb}`);
   assert.ok(sa && sb && sa !== sb, `secrets ${sa} / ${sb}`);
-  assert.deepEqual([await A.locator(".secret .skind").innerText(), await B.locator(".secret .skind").innerText()].map(k => k.toLowerCase()), ["dragon", "dragon"]);
+  assert.deepEqual([await A.locator(".secret .kind").innerText(), await B.locator(".secret .kind").innerText()].map(k => k.toLowerCase()), ["dragon", "dragon"]);
   assert.match(await A.locator(".time").innerText(), /^(2:00|1:[45]\d)$/); ok("dragons pool, 2:00 round");
   assert.ok(!(await text(A)).includes(sb) && !(await text(B)).includes(sa), "a page shows the other secret");
   ok(`round ${round}: A holds "${sa}", B holds "${sb}", neither page shows the other's`);
