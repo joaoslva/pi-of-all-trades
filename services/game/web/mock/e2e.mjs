@@ -300,6 +300,11 @@ await B.route("**/api/action**", r => r.abort());
 await B.click("text=Leave"); await B.waitForTimeout(4000);
 assert.deepEqual([await B.locator("#lost").isHidden(), await B.locator("input").isVisible()], [true, true]);
 ok("leave with a failed request: banner hidden and still on the join screen 4 s later");
+// The leave never arrived, so Join must reclaim the same slot (same token) instead of adding a ghost beside it.
+const tokB = await B.evaluate(() => localStorage.getItem("gameToken")); assert.ok(tokB, "token kept after a lost leave");
+await B.unroute("**/api/action**");
+await B.fill("input", "Bo"); await B.click("text=Join"); await B.waitForSelector(".summary");
+assert.equal(await B.evaluate(() => localStorage.getItem("gameToken")), tokB); ok("lost leave: the next Join reclaims the same slot");
 
 // 6: reduced motion
 const normal = await phone(); const reduced = await phone({ width: 412, height: 915 }, { reducedMotion: "reduce" });

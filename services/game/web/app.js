@@ -34,7 +34,7 @@ function setView(v) {
 }
 
 async function join(name) {
-  const r = await api("/api/join", { name, token: token || undefined });
+  const r = await api("/api/join", { name, token: token || store.get() || undefined });
   if (r.status === 409 && r.j.error === "bonded") { refusal = r.j.message; render(view); return; }
   if (!r.ok) { toJoin(); return; }
   token = r.j.token; store.set(token);
@@ -67,8 +67,9 @@ function toJoin() {
 function leave() {
   const t = token;
   toJoin();
-  // shortcut: a lost leave request leaves a ghost in the lobby until the server restarts; retry if that bites.
-  api(`/api/action?token=${encodeURIComponent(t)}`, { type: "leave" }).catch(() => {});
+  // A leave that never arrived leaves the player in the lobby: keep the token so the next Join reclaims that slot.
+  const keep = () => store.set(t);
+  api(`/api/action?token=${encodeURIComponent(t)}`, { type: "leave" }).then(r => { if (!r.ok && r.status !== 401) keep(); }, keep);
 }
 
 const remaining = () => view.deadline - (view.serverNow + Date.now() - receivedAt);
