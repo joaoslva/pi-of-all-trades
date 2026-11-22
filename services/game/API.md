@@ -62,7 +62,7 @@ All JSON. Errors are `{"error":"code","message":"text"}` with a 4xx status.
 ```
 
 - `other` is null in the lobby until someone joins. `deadline` is unix ms, only in `playing`. Clients compute remaining time with `deadline - (serverNow + elapsedSinceReceipt)`.
-- `secret` is present only for the holder, only after they sent `draw`, only until roundEnd. `clip` and `poster` are omitted when the character has no media. `tips` (hints for the holder, vague to specific) appears only here, never in `reveal`. `color` (the card frame, `#rrggbb`) is in `secret` and in both `reveal` entries, omitted when the character has none. A client with no clip shows the CSS reveal.
+- `secret` is present only for the holder, only after they sent `draw`, only until roundEnd. `clip` and `poster` are omitted when the character has no media. `tips` (hints for the holder, vague to specific) appears only here, never in `reveal`. `color` (the card frame, `#rrggbb`) is in `secret` and in both `reveal` entries, omitted when the character has none. A client with no clip shows the rune reveal.
 - `resolved.you` / `resolved.other` is `null`, `"got_it"` or `"forfeit"`.
 - `reveal` and `gain` only in `roundEnd` and `final`. `final` only in `final`.
 - `round` counts from 1. `rounds` is the lobby setting.
