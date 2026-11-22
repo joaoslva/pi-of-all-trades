@@ -4,123 +4,235 @@
   "name": "Hero 00",
   "kind": "rider",
   "clip": "c0.mp4",
-  "poster": "c0.jpg"
+  "poster": "c0.jpg",
+  "color": "#102030",
+  "tips": [
+   "Tip one for 00",
+   "Tip two for 00"
+  ]
  },
  {
   "id": "char-01",
   "name": "Hero 01",
   "kind": "dragon",
   "clip": "c1.mp4",
-  "poster": "c1.jpg"
+  "poster": "c1.jpg",
+  "color": "#112131",
+  "tips": [
+   "Tip one for 01",
+   "Tip two for 01"
+  ]
  },
  {
   "id": "char-02",
   "name": "Hero 02",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 02",
+   "Tip two for 02"
+  ]
  },
  {
   "id": "char-03",
   "name": "Hero 03",
-  "kind": "rider"
+  "kind": "rider",
+  "color": "#132333",
+  "tips": [
+   "Tip one for 03",
+   "Tip two for 03"
+  ]
  },
  {
   "id": "char-04",
   "name": "Hero 04",
-  "kind": "dragon"
+  "kind": "dragon",
+  "color": "#142434",
+  "tips": [
+   "Tip one for 04",
+   "Tip two for 04"
+  ]
  },
  {
   "id": "char-05",
   "name": "Hero 05",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 05",
+   "Tip two for 05"
+  ]
  },
  {
   "id": "char-06",
   "name": "Hero 06",
-  "kind": "rider"
+  "kind": "rider",
+  "color": "#162636",
+  "tips": [
+   "Tip one for 06",
+   "Tip two for 06"
+  ]
  },
  {
   "id": "char-07",
   "name": "Hero 07",
-  "kind": "dragon"
+  "kind": "dragon",
+  "color": "#172737",
+  "tips": [
+   "Tip one for 07",
+   "Tip two for 07"
+  ]
  },
  {
   "id": "char-08",
   "name": "Hero 08",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 08",
+   "Tip two for 08"
+  ]
  },
  {
   "id": "char-09",
   "name": "Hero 09",
-  "kind": "rider"
+  "kind": "rider",
+  "color": "#192939",
+  "tips": [
+   "Tip one for 09",
+   "Tip two for 09"
+  ]
  },
  {
   "id": "char-10",
   "name": "Hero 10",
-  "kind": "dragon"
+  "kind": "dragon",
+  "color": "#1a2a3a",
+  "tips": [
+   "Tip one for 10",
+   "Tip two for 10"
+  ]
  },
  {
   "id": "char-11",
   "name": "Hero 11",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 11",
+   "Tip two for 11"
+  ]
  },
  {
   "id": "char-12",
   "name": "Hero 12",
-  "kind": "rider"
+  "kind": "rider",
+  "color": "#1c2c3c",
+  "tips": [
+   "Tip one for 12",
+   "Tip two for 12"
+  ]
  },
  {
   "id": "char-13",
   "name": "Hero 13",
-  "kind": "dragon"
+  "kind": "dragon",
+  "color": "#1d2d3d",
+  "tips": [
+   "Tip one for 13",
+   "Tip two for 13"
+  ]
  },
  {
   "id": "char-14",
   "name": "Hero 14",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 14",
+   "Tip two for 14"
+  ]
  },
  {
   "id": "char-15",
   "name": "Hero 15",
-  "kind": "rider"
+  "kind": "rider",
+  "color": "#1f2f3f",
+  "tips": [
+   "Tip one for 15",
+   "Tip two for 15"
+  ]
  },
  {
   "id": "char-16",
   "name": "Hero 16",
-  "kind": "dragon"
+  "kind": "dragon",
+  "color": "#203040",
+  "tips": [
+   "Tip one for 16",
+   "Tip two for 16"
+  ]
  },
  {
   "id": "char-17",
   "name": "Hero 17",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 17",
+   "Tip two for 17"
+  ]
  },
  {
   "id": "char-18",
   "name": "Hero 18",
-  "kind": "rider"
+  "kind": "rider",
+  "color": "#223242",
+  "tips": [
+   "Tip one for 18",
+   "Tip two for 18"
+  ]
  },
  {
   "id": "char-19",
   "name": "Hero 19",
-  "kind": "dragon"
+  "kind": "dragon",
+  "color": "#233343",
+  "tips": [
+   "Tip one for 19",
+   "Tip two for 19"
+  ]
  },
  {
   "id": "char-20",
   "name": "Hero 20",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 20",
+   "Tip two for 20"
+  ]
  },
  {
   "id": "char-21",
   "name": "Hero 21",
-  "kind": "rider"
+  "kind": "rider",
+  "color": "#253545",
+  "tips": [
+   "Tip one for 21",
+   "Tip two for 21"
+  ]
  },
  {
   "id": "char-22",
   "name": "Hero 22",
-  "kind": "dragon"
+  "kind": "dragon",
+  "color": "#263646",
+  "tips": [
+   "Tip one for 22",
+   "Tip two for 22"
+  ]
  },
  {
   "id": "char-23",
   "name": "Hero 23",
-  "kind": "other"
+  "kind": "other",
+  "tips": [
+   "Tip one for 23",
+   "Tip two for 23"
+  ]
  }
 ]

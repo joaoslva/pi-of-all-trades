@@ -301,7 +301,7 @@ func leaked(v *View, forbidden []string) []string {
 
 func secretTokens(p *Player) []string {
 	s := p.secret
-	return []string{s.Name, s.ID, s.Clip, s.Poster, p.opaque}
+	return append([]string{s.Name, s.ID, s.Clip, s.Poster, s.Color, s.Partner, p.opaque}, s.Tips...)
 }
 
 func TestNoLeakBeforeRoundEnd(t *testing.T) {
@@ -309,6 +309,8 @@ func TestNoLeakBeforeRoundEnd(t *testing.T) {
 	// force media on both secrets so clip/poster names are checked too
 	for i, p := range g.players {
 		g.chars[i].Clip, g.chars[i].Poster = fmt.Sprintf("c%d.mp4", i), fmt.Sprintf("c%d.jpg", i)
+		g.chars[i].Color, g.chars[i].Partner = fmt.Sprintf("#abcde%d", i), fmt.Sprintf("partner-of-%d", i)
+		g.chars[i].Tips = []string{fmt.Sprintf("vague tip %d", i), fmt.Sprintf("specific tip %d", i)}
 		p.secret = &g.chars[i]
 	}
 	toks := []string{a, b}
@@ -329,8 +331,9 @@ func TestNoLeakBeforeRoundEnd(t *testing.T) {
 	check("playing, A resolved")
 
 	// the holder does see their own secret, so the check has teeth
-	if len(leaked(g.View(a, t0), secretTokens(g.players[0]))) == 0 {
-		t.Error("holder view missing own secret")
+	own := g.players[0].secret
+	if got := leaked(g.View(a, t0), append([]string{own.Name, own.Color}, own.Tips...)); len(got) != 2+len(own.Tips) {
+		t.Errorf("holder view shows only %v of own name, colour and tips", got)
 	}
 	act(t, g, b, forfeit, t0)
 	if len(leaked(g.View(a, t0), []string{g.players[1].secret.Name})) == 0 {
@@ -369,5 +372,110 @@ func TestMediaTokenLifecycle(t *testing.T) {
 	act(t, g, b, forfeit, t0)
 	if _, ok := g.Media(op, "clip"); ok {
 		t.Fatal("served after roundEnd")
+	}
+}
+
+// pool returns n characters; with partnered, 2k and 2k+1 are a rider and their dragon.
+func pool(n int, partnered bool) []Character {
+	cs := make([]Character, n)
+	for i := range cs {
+		cs[i] = Character{ID: fmt.Sprintf("p%02d", i), Name: fmt.Sprintf("Pool %02d", i), Kind: "rider"}
+		if partnered && i^1 < n {
+			cs[i].Partner = fmt.Sprintf("p%02d", i^1)
+		}
+	}
+	return cs
+}
+
+// playGame plays one game of the given rounds from the lobby and back, checking every round's pair, and returns the drawn ids.
+func playGame(t *testing.T, g *Game, a, b string, rounds int) []string {
+	t.Helper()
+	if err := g.Act(a, Action{Type: "set_rounds", Rounds: rounds}, t0); err != nil {
+		t.Fatal(err)
+	}
+	act(t, g, a, "start", t0)
+	for r := 0; r < rounds; r++ {
+		x, y := g.players[0].secret, g.players[1].secret
+		// a pool of just one rider and their partner is the only case that must pair them
+		if x == y || len(g.chars) > 2 && (x.Partner == y.ID || y.Partner == x.ID) {
+			t.Fatalf("round %d pairs %s with %s", g.round, x.ID, y.ID)
+		}
+		act(t, g, a, "draw", t0)
+		act(t, g, b, "draw", t0)
+		act(t, g, a, forfeit, t0)
+		act(t, g, b, forfeit, t0)
+		act(t, g, a, "next", t0)
+	}
+	e := g.TakeFinished()
+	act(t, g, a, "back_to_lobby", t0)
+	return e.Chars
+}
+
+func twoPlayers(t *testing.T, chars []Character, seed uint64) (*Game, string, string) {
+	g := NewGame(chars, rand.New(rand.NewPCG(seed, seed)))
+	return g, mustJoin(t, g, "A"), mustJoin(t, g, "B")
+}
+
+func TestBagNoRepeatAcrossGames(t *testing.T) {
+	for seed := uint64(0); seed < 300; seed++ {
+		g, a, b := twoPlayers(t, pool(40, true), seed)
+		first := playGame(t, g, a, b, 3)
+		if len(first) != 6 {
+			t.Fatalf("drawn %v", first)
+		}
+		seen := map[string]bool{}
+		for _, id := range first {
+			seen[id] = true
+		}
+		for _, id := range playGame(t, g, a, b, 3) {
+			if seen[id] {
+				t.Fatalf("seed %d: %s repeats across consecutive games", seed, id)
+			}
+		}
+	}
+}
+
+func TestBagRememberedFromHistory(t *testing.T) {
+	var recent []string
+	for i := 0; i < 30; i++ {
+		recent = append(recent, fmt.Sprintf("p%02d", i))
+	}
+	for seed := uint64(0); seed < 100; seed++ {
+		g, a, b := twoPlayers(t, pool(40, true), seed)
+		g.Remember(recent)
+		for _, id := range playGame(t, g, a, b, 3) {
+			if id < "p30" {
+				t.Fatalf("seed %d: drew remembered %s", seed, id)
+			}
+		}
+	}
+	g := NewGame(pool(40, true), rand.New(rand.NewPCG(1, 1)))
+	g.Remember(append(recent, "p30", "p31", "p32", "p33", "p34", "p35"))
+	if g.free() != DefaultRounds*MaxPlayers {
+		t.Errorf("remember left %d free, want one default game", g.free())
+	}
+}
+
+func TestBagRefillTinyPools(t *testing.T) {
+	for _, c := range []struct {
+		n         int
+		partnered bool
+	}{{2, true}, {2, false}, {3, true}, {3, false}, {4, true}, {5, true}} {
+		for seed := uint64(0); seed < 30; seed++ {
+			g, a, b := twoPlayers(t, pool(c.n, c.partnered), seed)
+			for i := 0; i < 10; i++ {
+				playGame(t, g, a, b, g.maxRounds())
+			}
+		}
+	}
+
+	// the bag holds only a rider and their partner: the round must refill, not pair them
+	g, a, b := twoPlayers(t, pool(4, true), 7)
+	g.used = map[string]bool{"p02": true, "p03": true}
+	playGame(t, g, a, b, 1)
+
+	g, a, _ = twoPlayers(t, pool(1, false), 1)
+	if err := g.Act(a, Action{Type: "start"}, t0); err != errRounds {
+		t.Errorf("start with one character: %v", err)
 	}
 }

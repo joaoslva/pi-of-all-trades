@@ -36,14 +36,18 @@ type OtherView struct {
 }
 
 type CharView struct {
-	Name string `json:"name"`
-	Kind string `json:"kind"`
+	Name  string `json:"name"`
+	Kind  string `json:"kind"`
+	Color string `json:"color,omitempty"`
 }
+
+func charView(c *Character) CharView { return CharView{c.Name, c.Kind, c.Color} }
 
 type SecretView struct {
 	CharView
-	Clip   string `json:"clip,omitempty"`
-	Poster string `json:"poster,omitempty"`
+	Clip   string   `json:"clip,omitempty"`
+	Poster string   `json:"poster,omitempty"`
+	Tips   []string `json:"tips,omitempty"`
 }
 
 type RevealView struct {
@@ -92,7 +96,7 @@ func (g *Game) View(token string, now time.Time) *View {
 			v.Deadline = g.deadline.UnixMilli()
 		}
 		if p.drawn {
-			v.Secret = &SecretView{CharView{p.secret.Name, p.secret.Kind}, "", ""}
+			v.Secret = &SecretView{CharView: charView(p.secret), Tips: p.secret.Tips}
 			if p.secret.Clip != "" {
 				v.Secret.Clip = "/m/" + p.opaque + "/clip"
 			}
@@ -102,8 +106,8 @@ func (g *Game) View(token string, now time.Time) *View {
 		}
 	case RoundEnd, Final:
 		v.Reveal = &RevealView{
-			YourGuess:  CharView{o.secret.Name, o.secret.Kind},
-			TheirGuess: CharView{p.secret.Name, p.secret.Kind},
+			YourGuess:  charView(o.secret),
+			TheirGuess: charView(p.secret),
 		}
 		v.Gain = &Pair[int]{p.gain, o.gain}
 		if g.phase == Final {

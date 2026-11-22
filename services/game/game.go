@@ -35,11 +35,14 @@ const (
 )
 
 type Character struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Kind   string `json:"kind"`
-	Clip   string `json:"clip,omitempty"`
-	Poster string `json:"poster,omitempty"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Kind    string   `json:"kind"`
+	Clip    string   `json:"clip,omitempty"`
+	Poster  string   `json:"poster,omitempty"`
+	Color   string   `json:"color,omitempty"`
+	Tips    []string `json:"tips,omitempty"`
+	Partner string   `json:"partner,omitempty"`
 }
 
 type Player struct {
@@ -64,6 +67,7 @@ type HistoryEntry struct {
 	Finished string          `json:"finished"`
 	Rounds   int             `json:"rounds"`
 	Players  []HistoryPlayer `json:"players"`
+	Chars    []string        `json:"-"` // secret ids in draw order; only the history file carries them
 }
 
 type Action struct {
@@ -98,7 +102,8 @@ type Game struct {
 	players   []*Player
 	rounds    int
 	round     int
-	used      map[string]bool
+	used      map[string]bool // the shuffle bag: drawn since the last refill, kept across games
+	drawn     []string        // this game's secret ids
 	deadline  time.Time
 	downSince time.Time
 	finished  *HistoryEntry
@@ -135,6 +140,26 @@ func (g *Game) other(p *Player) *Player {
 }
 
 func (g *Game) maxRounds() int { return min(MaxRounds, len(g.chars)/MaxPlayers) }
+
+// Remember seeds the bag with recently drawn ids, newest first, leaving at least one default game's worth free.
+func (g *Game) Remember(ids []string) {
+	for _, id := range ids {
+		if len(g.used) >= len(g.chars)-DefaultRounds*MaxPlayers {
+			return
+		}
+		g.used[id] = true
+	}
+}
+
+func (g *Game) free() int {
+	n := 0
+	for i := range g.chars {
+		if !g.used[g.chars[i].ID] {
+			n++
+		}
+	}
+	return n
+}
 
 // Join returns the token to use: the given one on a rejoin, a fresh one for a new player.
 func (g *Game) Join(token, name string) (string, error) {
@@ -228,6 +253,13 @@ func (g *Game) Act(token string, a Action, now time.Time) error {
 		if len(g.players) < MaxPlayers {
 			return errPlayers
 		}
+		if g.rounds > g.maxRounds() {
+			return errRounds
+		}
+		// refill up front so secrets never repeat within one game
+		if g.free() < g.rounds*MaxPlayers {
+			g.used = map[string]bool{}
+		}
 		g.round = 0
 		g.startRound()
 	case "draw":
@@ -299,15 +331,35 @@ func (g *Game) startRound() {
 	g.round++
 	g.phase = Drawing
 	g.deadline = time.Time{}
+	var picked []*Character
+	clash := func(c *Character, partners bool) bool {
+		for _, q := range picked {
+			if c == q || partners && (c.Partner == q.ID || q.Partner == c.ID) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, p := range g.players {
+		// pass 0: unused and no partner pair; 1: refill the bag; 2: allow a partner pair (tiny all-partnered pools)
 		var free []*Character
-		for i := range g.chars {
-			if !g.used[g.chars[i].ID] {
-				free = append(free, &g.chars[i])
+		for pass := 0; len(free) == 0 && pass < 3; pass++ {
+			if pass == 1 {
+				g.used = map[string]bool{}
+				for _, q := range picked {
+					g.used[q.ID] = true
+				}
+			}
+			for i := range g.chars {
+				if c := &g.chars[i]; !g.used[c.ID] && !clash(c, pass < 2) {
+					free = append(free, c)
+				}
 			}
 		}
 		p.secret = free[g.rng.IntN(len(free))]
+		picked = append(picked, p.secret)
 		g.used[p.secret.ID] = true
+		g.drawn = append(g.drawn, p.secret.ID)
 		p.opaque = g.hexToken()
 		p.drawn, p.resolved, p.gain = false, "", 0
 	}
@@ -324,7 +376,7 @@ func (g *Game) endRound() {
 
 func (g *Game) enterFinal(now time.Time) {
 	g.phase = Final
-	e := &HistoryEntry{Finished: now.UTC().Format(time.RFC3339), Rounds: g.rounds}
+	e := &HistoryEntry{Finished: now.UTC().Format(time.RFC3339), Rounds: g.rounds, Chars: g.drawn}
 	for _, p := range g.players {
 		e.Players = append(e.Players, HistoryPlayer{p.Name, p.Score})
 	}
@@ -351,7 +403,7 @@ func (g *Game) reset() {
 	g.phase = Lobby
 	g.round = 0
 	g.rounds = min(g.rounds, g.maxRounds())
-	g.used = map[string]bool{}
+	g.drawn = nil
 	g.deadline = time.Time{}
 	g.finished = nil
 	for _, p := range g.players {

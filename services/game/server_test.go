@@ -148,6 +148,12 @@ func TestTwoClientGame(t *testing.T) {
 	va := a.await(func(v View) bool { return v.Secret != nil })
 	b.must("draw")
 	vb := b.await(func(v View) bool { return v.Phase == Playing && v.Secret != nil })
+	chars, _ := loadCharacters("testdata/content/characters.json")
+	for _, c := range chars {
+		if c.Name == va.Secret.Name && (c.Color != va.Secret.Color || len(c.Tips) == 0 || strings.Join(c.Tips, "|") != strings.Join(va.Secret.Tips, "|")) {
+			t.Fatalf("holder secret %+v lacks colour or tips of %+v", va.Secret, c)
+		}
+	}
 
 	if va.Secret.Clip != "" {
 		resp, err := http.Get(ts.URL + va.Secret.Clip)
@@ -209,12 +215,16 @@ func TestTwoClientGame(t *testing.T) {
 	}
 
 	raw, _ := os.ReadFile(filepath.Join(dir, "history.jsonl"))
-	if strings.Count(string(raw), "\n") != 1 {
+	if strings.Count(string(raw), "\n") != 1 || !strings.Contains(string(raw), `"chars":["`) {
 		t.Fatalf("history file: %q", raw)
 	}
 	resp, _ := http.Get(ts.URL + "/api/history")
+	hb, _ := io.ReadAll(resp.Body)
+	if strings.Contains(string(hb), "chars") || strings.Contains(string(hb), "char-") {
+		t.Fatalf("/api/history exposes secret ids: %s", hb)
+	}
 	var h []HistoryEntry
-	json.NewDecoder(resp.Body).Decode(&h)
+	json.Unmarshal(hb, &h)
 	if len(h) != 1 || h[0].Rounds != 2 || h[0].Players[0].Name != "Ann" || h[0].Players[0].Score != 3 {
 		t.Fatalf("history %+v", h)
 	}
@@ -242,5 +252,44 @@ func TestRealTimerTimeout(t *testing.T) {
 	end := a.await(inPhase(RoundEnd))
 	if *end.Resolved.You != forfeit || *end.Resolved.Other != forfeit {
 		t.Fatalf("resolved %+v", end.Resolved)
+	}
+}
+
+func TestHistorySeedsBag(t *testing.T) {
+	dir := t.TempDir()
+	chars, _ := loadCharacters("testdata/content/characters.json")
+	old := `{"finished":"2026-01-01T00:00:00Z","rounds":1,"players":[{"name":"Old","score":1}]}`
+	os.WriteFile(filepath.Join(dir, "history.jsonl"), []byte(old+"\n\n{not json\n"), 0o644)
+	s, err := NewServer(NewGame(chars, rand.New(rand.NewPCG(5, 6))), dir, "testdata/content", "testdata/web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.appendHistory(&HistoryEntry{Finished: "2026-01-02T00:00:00Z", Rounds: 1, Players: []HistoryPlayer{{"New", 2}}, Chars: []string{"char-03", "char-07"}})
+
+	g := NewGame(chars, rand.New(rand.NewPCG(5, 6)))
+	s2, err := NewServer(g, dir, "testdata/content", "testdata/web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s2.history) != 2 || s2.history[0].Players[0].Name != "New" || s2.history[1].Players[0].Name != "Old" {
+		t.Fatalf("history %+v", s2.history)
+	}
+	if strings.Join(s2.history[0].Chars, ",") != "char-03,char-07" || s2.history[1].Chars != nil {
+		t.Fatalf("chars did not round-trip: %+v", s2.history)
+	}
+	if !g.used["char-03"] || !g.used["char-07"] || len(g.used) != 2 {
+		t.Fatalf("bag not seeded: %v", g.used)
+	}
+}
+
+func TestStaticNoCache(t *testing.T) {
+	_, ts, _ := newTestServer(t)
+	resp, err := http.Get(ts.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if cc := resp.Header.Get("Cache-Control"); cc != "no-cache" {
+		t.Fatalf("Cache-Control %q", cc)
 	}
 }

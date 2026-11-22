@@ -15,6 +15,12 @@ import (
 
 const keepalive = 15 * time.Second
 
+// historyLine is one line of history.jsonl: the public entry plus the secret ids, which /api/history never shows.
+type historyLine struct {
+	HistoryEntry
+	Chars []string `json:"chars,omitempty"`
+}
+
 type Server struct {
 	mu       sync.Mutex
 	g        *Game
@@ -36,13 +42,26 @@ func NewServer(g *Game, dataDir, contentDir, webDir string) (*Server, error) {
 		subs:     map[string]map[chan []byte]struct{}{},
 		histPath: filepath.Join(dataDir, "history.jsonl"),
 		mediaDir: filepath.Join(contentDir, "media"),
-		web:      http.FileServer(http.Dir(webDir)),
+		web:      noCache(http.FileServer(http.Dir(webDir))),
 		now:      time.Now,
 	}
 	s.timer = time.AfterFunc(time.Hour, s.wake)
 	s.timer.Stop()
 	s.loadHistory()
+	var recent []string
+	for _, e := range s.history {
+		recent = append(recent, e.Chars...)
+	}
+	g.Remember(recent)
 	return s, nil
+}
+
+// noCache makes phones revalidate the page on every load (FileServer answers 304), so a deploy is picked up at once.
+func noCache(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) loadHistory() {
@@ -53,8 +72,10 @@ func (s *Server) loadHistory() {
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		var e HistoryEntry
-		if json.Unmarshal(sc.Bytes(), &e) == nil {
+		var l historyLine
+		if json.Unmarshal(sc.Bytes(), &l) == nil {
+			e := l.HistoryEntry
+			e.Chars = l.Chars
 			s.history = append([]HistoryEntry{e}, s.history...)
 			if len(s.history) > HistoryKeep {
 				s.history = s.history[:HistoryKeep]
@@ -129,7 +150,7 @@ func (s *Server) changed(now time.Time) {
 }
 
 func (s *Server) appendHistory(e *HistoryEntry) {
-	b, _ := json.Marshal(e)
+	b, _ := json.Marshal(historyLine{*e, e.Chars})
 	f, err := os.OpenFile(s.histPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err == nil {
 		_, err = f.Write(append(b, '\n'))
