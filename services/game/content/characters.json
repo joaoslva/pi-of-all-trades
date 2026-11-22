@@ -11,7 +11,13 @@
   ],
   "importance": 3,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#1F2421",
+  "tips": [
+   "Raised to be a scribe, forced into the Riders Quadrant.",
+   "Her signet is lightning.",
+   "Bonded to Tairn, and also to Andarna."
+  ]
  },
  {
   "id": "tairn",
@@ -25,7 +31,13 @@
   ],
   "importance": 3,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#1F2421",
+  "tips": [
+   "A morningstartail; his name means thunder.",
+   "Black scales; called a killing machine.",
+   "Bonded to a Sorrengail."
+  ]
  },
  {
   "id": "andarna",
@@ -39,7 +51,13 @@
   ],
   "importance": 3,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#FFD400",
+  "tips": [
+   "A feathertail, far smaller than most dragons.",
+   "Her scales were gold when she was young.",
+   "The second dragon of a Sorrengail."
+  ]
  },
  {
   "id": "xaden",
@@ -53,7 +71,13 @@
   ],
   "importance": 3,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#1A5B92",
+  "tips": [
+   "Duke of Tyrrendor and a morally gray wingleader.",
+   "His signet wields shadows.",
+   "His dragon is Sgaeyl."
+  ]
  },
  {
   "id": "sgaeyl",
@@ -67,7 +91,13 @@
   ],
   "importance": 3,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#1A5B92",
+  "tips": [
+   "A daggertail; her name means shadow.",
+   "Blue scales, among the rarest of blues.",
+   "Mated to a black dragon."
+  ]
  },
  {
   "id": "dain",
@@ -81,7 +111,13 @@
   ],
   "importance": 2,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "color": "#C52233",
+  "tips": [
+   "Son of a colonel; a childhood friend of Violet.",
+   "His signet reveals the past.",
+   "His dragon is Cath."
+  ]
  },
  {
   "id": "cath",
@@ -95,7 +131,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#C52233",
+  "tips": [
+   "A swordtail; loyal and caring.",
+   "Red scales.",
+   "Bonded to a colonel's son."
+  ]
  },
  {
   "id": "rhiannon",
@@ -109,7 +151,13 @@
   ],
   "importance": 3,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "A squad leader; patient and loyal.",
+   "Her signet is summoning.",
+   "Her dragon is Feirge."
+  ]
  },
  {
   "id": "feirge",
@@ -123,7 +171,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "A daggertail; her name means anger.",
+   "Green scales.",
+   "Bonded to a patient, loyal squad leader."
+  ]
  },
  {
   "id": "ridoc",
@@ -137,7 +191,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#7F4F24",
+  "tips": [
+   "A joker and loyal friend.",
+   "His signet is ice.",
+   "His dragon is Aotrom."
+  ]
  },
  {
   "id": "aotrom",
@@ -151,7 +211,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#7F4F24",
+  "tips": [
+   "A swordtail; his name means light.",
+   "Brown scales.",
+   "Bonded to a loyal friend who jokes a lot."
+  ]
  },
  {
   "id": "sawyer",
@@ -165,7 +231,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#C52233",
+  "tips": [
+   "A Fourth Wing rider who works with metal.",
+   "Later becomes an executive officer.",
+   "His dragon is Sliseag."
+  ]
  },
  {
   "id": "sliseag",
@@ -179,7 +251,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#C52233",
+  "tips": [
+   "A swordtail; the name means slice.",
+   "Red scales.",
+   "Bonded to a metalworker."
+  ]
  },
  {
   "id": "liam",
@@ -193,7 +271,12 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#C52233",
+  "tips": [
+   "A strong member of Fourth Wing, loved by his friends.",
+   "His dragon is Deigh."
+  ]
  },
  {
   "id": "deigh",
@@ -207,7 +290,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#C52233",
+  "tips": [
+   "A daggertail; the name means ice.",
+   "Red scales.",
+   "Bonded to a Fourth Wing rider."
+  ]
  },
  {
   "id": "imogen",
@@ -221,7 +310,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#FB8500",
+  "tips": [
+   "A ruthless third-year with pink hair.",
+   "Her signet wipes recent memories.",
+   "Her dragon is Glane."
+  ]
  },
  {
   "id": "glane",
@@ -235,7 +330,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#FB8500",
+  "tips": [
+   "A daggertail; the name means clean or pure.",
+   "Orange scales.",
+   "Bonded to a ruthless third-year."
+  ]
  },
  {
   "id": "bodhi",
@@ -249,7 +350,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "A Fourth Wing rider, later a section leader.",
+   "Cousin of a duke; his signet counters signets.",
+   "His dragon is Cuir."
+  ]
  },
  {
   "id": "cuir",
@@ -263,7 +370,12 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "Green scales.",
+   "Bonded to a duke's cousin."
+  ]
  },
  {
   "id": "garrick",
@@ -277,7 +389,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#7F4F24",
+  "tips": [
+   "Best friend of a duke; a Fourth Wing rider.",
+   "Later a lieutenant.",
+   "His dragon is Chradh."
+  ]
  },
  {
   "id": "chradh",
@@ -291,7 +409,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#7F4F24",
+  "tips": [
+   "A scorpiontail; the name means pain.",
+   "Brown scales.",
+   "Bonded to the best friend of a duke."
+  ]
  },
  {
   "id": "mira",
@@ -305,7 +429,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "Violet's older sister, always chasing family secrets.",
+   "Her signet extends wards.",
+   "Her dragon is Teine."
+  ]
  },
  {
   "id": "teine",
@@ -319,7 +449,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "A clubtail; the name means fire.",
+   "Green scales.",
+   "Bonded to one of three siblings."
+  ]
  },
  {
   "id": "brennan",
@@ -333,7 +469,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#FB8500",
+  "tips": [
+   "Violet's older brother; a strategist.",
+   "His signet is mending.",
+   "His dragon is Marbh."
+  ]
  },
  {
   "id": "marbh",
@@ -347,7 +489,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#FB8500",
+  "tips": [
+   "A daggertail; the name means dead.",
+   "Orange scales.",
+   "Bonded to a healer."
+  ]
  },
  {
   "id": "lilith",
@@ -361,7 +509,13 @@
   ],
   "importance": 3,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#7F4F24",
+  "tips": [
+   "Former commanding general of the war college.",
+   "Mother of three, including a lightning wielder.",
+   "Her dragon is Aimsir."
+  ]
  },
  {
   "id": "aimsir",
@@ -375,7 +529,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#7F4F24",
+  "tips": [
+   "The name means weather.",
+   "Brown scales.",
+   "Bonded to a commanding general."
+  ]
  },
  {
   "id": "jack",
@@ -389,7 +549,12 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#FB8500",
+  "tips": [
+   "A cruel cadet and a bully to first-years.",
+   "His dragon is Baide."
+  ]
  },
  {
   "id": "baide",
@@ -403,7 +568,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#FB8500",
+  "tips": [
+   "A scorpiontail; the name means herd.",
+   "Orange scales.",
+   "Bonded to a cruel cadet."
+  ]
  },
  {
   "id": "melgren",
@@ -417,7 +588,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#202020",
+  "tips": [
+   "Top commander of the army; cold and calculating.",
+   "His signet foresees how battles end.",
+   "His dragon is Codagh."
+  ]
  },
  {
   "id": "codagh",
@@ -431,7 +608,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#202020",
+  "tips": [
+   "A swordtail; the name means war.",
+   "Black scales.",
+   "Bonded to the army's top commander."
+  ]
  },
  {
   "id": "aaric",
@@ -444,7 +627,13 @@
   "importance": 2,
   "confidence": "unverified",
   "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
-  "notes": "spelling conflict: Graycastle/Greycastle; Tauri in dragon table"
+  "notes": "spelling conflict: Graycastle/Greycastle; Tauri in dragon table",
+  "color": "#1A5B92",
+  "tips": [
+   "Youngest son of a king.",
+   "His signet sees the future.",
+   "His dragon is Molvic."
+  ]
  },
  {
   "id": "molvic",
@@ -456,7 +645,13 @@
   ],
   "importance": 1,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "color": "#1A5B92",
+  "tips": [
+   "A clubtail with a scarred snout; level-headed.",
+   "Blue scales.",
+   "Bonded to a king's son."
+  ]
  },
  {
   "id": "felix",
@@ -470,7 +665,12 @@
   ],
   "importance": 2,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "color": "#C52233",
+  "tips": [
+   "A Fourth Wing rider with a sharp tongue.",
+   "His dragon is Nuirlach."
+  ]
  },
  {
   "id": "nuirlach",
@@ -484,7 +684,13 @@
   ],
   "importance": 1,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "color": "#C52233",
+  "tips": [
+   "A swordtail.",
+   "Red scales.",
+   "Bonded to a sharp-tongued rider."
+  ]
  },
  {
   "id": "sloane",
@@ -497,7 +703,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#C52233",
+  "tips": [
+   "A rider whose signet siphons power.",
+   "She fears channeling.",
+   "Her dragon is Thoirt."
+  ]
  },
  {
   "id": "thoirt",
@@ -510,7 +722,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#C52233",
+  "tips": [
+   "A daggertail; the name means importance.",
+   "Red scales.",
+   "Bonded to a rider who fears channeling."
+  ]
  },
  {
   "id": "quinn",
@@ -523,7 +741,13 @@
   ],
   "importance": 2,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "A third-year; best friend of a ruthless rider.",
+   "Her signet is astral projection.",
+   "Her dragon is Cruth."
+  ]
  },
  {
   "id": "cruth",
@@ -536,7 +760,13 @@
   ],
   "importance": 1,
   "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/",
+  "color": "#4C956C",
+  "tips": [
+   "A scorpiontail; the name means figure.",
+   "Green scales.",
+   "Bonded to a third-year."
+  ]
  },
  {
   "id": "catriona",
@@ -550,7 +780,12 @@
   ],
   "importance": 2,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "tips": [
+   "A flier from Poromiel.",
+   "A niece of the heir to the Poromish throne.",
+   "An ex of a duke."
+  ]
  },
  {
   "id": "tecarus",
@@ -564,7 +799,11 @@
   ],
   "importance": 2,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "tips": [
+   "First in line to the Poromish throne.",
+   "Uncle of a flier named Cat."
+  ]
  },
  {
   "id": "aetos",
@@ -577,7 +816,10 @@
   ],
   "importance": 2,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "tips": [
+   "Father of a rider named Dain."
+  ]
  },
  {
   "id": "panchek",
@@ -590,7 +832,11 @@
   ],
   "importance": 2,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "tips": [
+   "An officer at Basgiath War College.",
+   "A commandant."
+  ]
  },
  {
   "id": "jesinia",
@@ -604,6 +850,10 @@
   ],
   "importance": 2,
   "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
+  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)",
+  "tips": [
+   "A scribe, not a rider.",
+   "Violet's longtime friend from the Scribe Quadrant."
+  ]
  }
 ]
