@@ -2,7 +2,7 @@ GO ?= go
 BIN = rootfs/usr/local/bin/guessing-day
 SHARE = rootfs/usr/share/guessing-day
 
-.PHONY: build test
+.PHONY: build test weight
 build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags='-s -w' -o $(BIN) .
 	rm -rf $(SHARE) && mkdir -p $(SHARE)
@@ -11,3 +11,6 @@ build:
 
 test:
 	$(GO) vet ./... && $(GO) test ./...
+
+weight:
+	node tools/check-weight.mjs
