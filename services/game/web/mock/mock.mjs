@@ -12,10 +12,13 @@ const ROUND_SECONDS = +(process.env.MOCK_SECONDS || 180);
 const CLIP = join(WEB, "mock", "test-clip.mp4");
 const POSTER = join(WEB, "mock", "test-poster.jpg");
 const CHARS = [
-  { name: "Tairn", kind: "dragon", media: true }, { name: "Violet Sorrengail", kind: "rider" },
-  { name: "Andarna", kind: "dragon" }, { name: "Xaden Riorson", kind: "rider" },
-  { name: "Sgaeyl", kind: "dragon" }, { name: "Dain Aetos", kind: "rider" },
-  { name: "Cath", kind: "dragon" }, { name: "Rhiannon Matthias", kind: "rider" },
+  { name: "Tairn", kind: "dragon", color: "#1F2421", media: true, tips: ["Tairn tip one.", "Tairn tip two."] },
+  { name: "Violet Sorrengail", kind: "rider", color: "#1F2421", tips: ["Violet vague tip.", "Violet closer tip.", "Violet specific tip."] },
+  { name: "Andarna", kind: "dragon", color: "#FFD400", tips: ["Andarna tip."] },
+  { name: "Xaden Riorson", kind: "rider", color: "#1A5B92" },
+  { name: "Sgaeyl", kind: "dragon", color: "#1A5B92" },
+  { name: "Colonel Lyron Panchek", kind: "other", tips: ["Panchek tip."] },
+  { name: "Cath", kind: "dragon", color: "#C52233" }, { name: "Rhiannon Matthias", kind: "rider", color: "#4C956C" },
 ];
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2" };
 
@@ -33,13 +36,14 @@ function view(p) {
     v.drawn = { you: p.drawn, other: o.drawn }; v.resolved = { you: p.res, other: o.res };
     if (g.phase === "playing") v.deadline = g.deadline;
     if (p.drawn) {
-      const c = p.secret, s = { name: c.name, kind: c.kind };
+      const c = p.secret, s = { name: c.name, kind: c.kind, color: c.color, tips: c.tips };
       if (c.media && existsSync(CLIP)) { s.clip = `/m/${p.opaque}/clip`; s.poster = `/m/${p.opaque}/poster`; }
       v.secret = s;
     }
   }
   if (g.phase === "roundEnd" || g.phase === "final") {
-    v.reveal = { yourGuess: { name: o.secret.name, kind: o.secret.kind }, theirGuess: { name: p.secret.name, kind: p.secret.kind } };
+    const shown = c => ({ name: c.name, kind: c.kind, color: c.color });
+    v.reveal = { yourGuess: shown(o.secret), theirGuess: shown(p.secret) };
     v.gain = { you: p.gain, other: o.gain };
     if (g.phase === "final") v.final = g.final;
   }
