@@ -261,5 +261,18 @@ setInterval(() => {
   t.classList.toggle("low", r <= 30000);
 }, 250);
 
+// A fixed-seed scatter of tilted runes, one per 80px cell, kept inside the 240px tile so no rune is cut at a seam.
+(function runeBackground() {
+  const ink = getComputedStyle(document.documentElement).getPropertyValue("--rune-ink").trim(), L = Object.keys(RUNES);
+  let seed = 11, g = "";
+  const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+  for (let i = 0; i < 9; i++) {
+    const x = (i % 3) * 80 + 25 + rnd() * 30, y = Math.floor(i / 3) * 80 + 25 + rnd() * 30, k = 0.4 + rnd() * 0.25, rot = rnd() * 50 - 25;
+    g += `<path transform="translate(${x} ${y}) rotate(${rot}) scale(${k}) translate(-22 -32)" d="${RUNES[L[Math.floor(rnd() * 26)]]}"/>`;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" fill="none" stroke="${ink}" stroke-width="4">${g}</svg>`;
+  document.body.style.setProperty("--runes", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+})();
+
 render(null);
 if (token) join("");
