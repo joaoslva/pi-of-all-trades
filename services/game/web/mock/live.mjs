@@ -36,7 +36,7 @@ for (let round = 1; round <= 1; round++) {
   ok(`round ${round}: A holds "${sa}", B holds "${sb}", neither page shows the other's`);
   await A.screenshot({ path: `${OUT}/playing-A.png` });
   await A.click("text=Got it"); await B.click("text=Forfeit");
-  await A.waitForSelector("text=Next round");
+  await A.waitForSelector("text=Next round"); await B.waitForSelector("text=Next round");
   assert.ok((await text(A)).includes(sb) && (await text(B)).includes(sa)); ok("roundEnd reveals both secrets");
   await A.screenshot({ path: `${OUT}/roundEnd-A.png` });
   await A.reload(); await A.waitForSelector("text=Next round"); ok("reload mid-game restores the screen from the token");
