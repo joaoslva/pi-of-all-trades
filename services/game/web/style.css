@@ -98,9 +98,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outl
 input { width: 100%; min-height: 52px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--field); background: var(--bg); }
 .row { display: flex; gap: 10px; align-items: center; }
 .row > * { flex: 1; }
-.stepper { display: flex; align-items: center; justify-content: center; gap: 14px; }
-.stepper button { width: 52px; flex: none; padding: 0; font-size: 1.4rem; }
-.stepper output { min-width: 2ch; text-align: center; font-size: 1.6rem; color: var(--gold); }
+.opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.seg { display: flex; align-items: center; gap: 6px; }
+.seg button { min-height: 48px; min-width: 48px; padding: 0 9px; }
+.seg output { min-width: 2ch; text-align: center; font-size: 1.4rem; color: var(--gold); }
+button[aria-pressed="true"] { background: var(--gold); color: var(--on-gold); border-color: var(--gold); font-weight: 700; }
+.panel > .big { margin-top: 14px; }
 .link { min-height: 48px; border: 0; color: var(--gold); text-decoration: underline; }
 
 .refused { text-align: center; border-color: var(--danger-ink); background: var(--danger-bg); }

@@ -1,5 +1,5 @@
 // Stand-in for the Go server, enough of API.md to play two phones. node mock/mock.mjs [port]
-// MOCK_SECONDS shortens the round so a timeout is quick to see.
+// MOCK_SECONDS overrides every round length so a timeout is quick to see.
 import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -8,7 +8,6 @@ import { extname, join, normalize } from "node:path";
 
 const WEB = fileURLToPath(new URL("..", import.meta.url));
 const PORT = +(process.argv[2] || 18091);
-const ROUND_SECONDS = +(process.env.MOCK_SECONDS || 180);
 const CLIP = join(WEB, "mock", "test-clip.mp4");
 const POSTER = join(WEB, "mock", "test-poster.jpg");
 const CHARS = [
@@ -23,20 +22,22 @@ const CHARS = [
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2" };
 
 let g;
-const reset = () => (g = { phase: "lobby", players: [], rounds: 3, round: 0, deadline: 0, used: 0, gain: null, final: null, media: new Map(), history: [] });
+const DEFAULTS = { rounds: 3, seconds: 180, hints: true, pool: "all" };
+const reset = () => (g = { phase: "lobby", players: [], options: { ...DEFAULTS }, round: 0, deadline: 0, used: 0, gain: null, final: null, media: new Map(), history: [] });
 reset();
 const other = p => g.players.find(q => q !== p);
-const bonus = () => Math.floor((2 * Math.max(0, g.deadline - Date.now())) / (ROUND_SECONDS * 1000));
+const roundMs = () => (+process.env.MOCK_SECONDS || g.options.seconds) * 1000;
+const bonus = () => Math.min(2, Math.floor((3 * Math.max(0, g.deadline - Date.now())) / roundMs()));
 
 function view(p) {
   const o = other(p), pub = q => ({ name: q.name, score: q.score, connected: q.connected });
   const v = { phase: g.phase, serverNow: Date.now(), you: { name: p.name, score: p.score }, other: o ? pub(o) : null,
-    rounds: g.rounds, round: g.round, canStart: g.phase === "lobby" && g.players.length === 2 };
+    options: g.options, round: g.round, canStart: g.phase === "lobby" && g.players.length === 2 };
   if (g.phase === "drawing" || g.phase === "playing") {
     v.drawn = { you: p.drawn, other: o.drawn }; v.resolved = { you: p.res, other: o.res };
     if (g.phase === "playing") v.deadline = g.deadline;
     if (p.drawn) {
-      const c = p.secret, s = { name: c.name, kind: c.kind, color: c.color, tips: c.tips };
+      const c = p.secret, s = { name: c.name, kind: c.kind, color: c.color, tips: g.options.hints ? c.tips : undefined };
       if (c.media && existsSync(CLIP)) { s.clip = `/m/${p.opaque}/clip`; s.poster = `/m/${p.opaque}/poster`; }
       v.secret = s;
     }
@@ -53,8 +54,9 @@ const push = () => g.players.forEach(p => p.sse && p.sse.write(`event: view\ndat
 
 function startRound() {
   g.round++; g.phase = "drawing";
+  const deck = CHARS.filter(c => g.options.pool === "all" || `${c.kind}s` === g.options.pool);
   g.players.forEach((p, i) => {
-    p.secret = CHARS[(g.used + i) % CHARS.length]; p.drawn = false; p.res = null; p.gain = 0;
+    p.secret = deck[(g.used + i) % deck.length]; p.drawn = false; p.res = null; p.gain = 0;
     p.opaque = randomBytes(8).toString("hex"); g.media.set(p.opaque, p);
   });
   g.used += 2;
@@ -63,10 +65,10 @@ function maybeEnd() {
   if (g.phase !== "playing" || g.players.some(p => !p.res)) return;
   g.players.forEach(p => { p.gain = p.res === "got_it" ? 1 + bonus() : 0; p.score += p.gain; });
   g.media.clear();
-  if (g.round >= g.rounds) {
+  if (g.round >= g.options.rounds) {
     const [a, b] = g.players, tie = a.score === b.score;
     g.final = { winner: tie ? "" : (a.score > b.score ? a : b).name, tie };
-    g.history.unshift({ finished: new Date().toISOString(), rounds: g.rounds, players: g.players.map(p => ({ name: p.name, score: p.score })) });
+    g.history.unshift({ finished: new Date().toISOString(), rounds: g.options.rounds, players: g.players.map(p => ({ name: p.name, score: p.score })) });
     g.phase = "final";
   } else g.phase = "roundEnd";
 }
@@ -83,14 +85,22 @@ const byToken = t => g.players.find(p => p.token === t);
 function act(p, a, res) {
   const ph = g.phase, bad = () => err(res, 409, "phase", "Not now.");
   switch (a.type) {
-    case "set_rounds": if (ph !== "lobby") return bad(); g.rounds = Math.min(10, Math.max(1, a.rounds | 0)); break;
+    case "set_options": {
+      if (ph !== "lobby") return bad();
+      const o = { ...g.options, ...Object.fromEntries(Object.keys(DEFAULTS).filter(k => k in a).map(k => [k, a[k]])) };
+      if (!(Number.isInteger(o.rounds) && o.rounds >= 1 && o.rounds <= 10)) return err(res, 400, "rounds");
+      if (![120, 180, 300].includes(o.seconds)) return err(res, 400, "seconds");
+      if (typeof o.hints !== "boolean") return err(res, 400, "bad_request");
+      if (!["all", "riders", "dragons"].includes(o.pool)) return err(res, 400, "pool");
+      g.options = o; break;
+    }
     case "start": if (ph !== "lobby" || g.players.length < 2) return bad(); startRound(); break;
     case "draw": if (ph !== "drawing") return bad(); p.drawn = true;
-      if (g.players.every(q => q.drawn)) { g.phase = "playing"; g.deadline = Date.now() + ROUND_SECONDS * 1000; } break;
+      if (g.players.every(q => q.drawn)) { g.phase = "playing"; g.deadline = Date.now() + roundMs(); } break;
     case "got_it": case "forfeit": if (ph !== "playing") return bad(); p.res ||= a.type; maybeEnd(); break;
     case "next": if (ph === "roundEnd") startRound(); else if (ph !== "drawing") return bad(); break;
     case "back_to_lobby": if (ph !== "final") return bad(); g.players.forEach(q => (q.score = 0)); g.phase = "lobby"; g.round = 0; g.used = 0; break;
-    case "leave": g.players = g.players.filter(q => q !== p); if (ph !== "lobby") { g.phase = "lobby"; g.round = 0; g.players.forEach(q => (q.score = 0)); } break;
+    case "leave": g.players = g.players.filter(q => q !== p); if (!g.players.length) g.options = { ...DEFAULTS }; if (ph !== "lobby") { g.phase = "lobby"; g.round = 0; g.players.forEach(q => (q.score = 0)); } break;
     default: return err(res, 400, "type");
   }
   send(res, 200, p.token && g.players.includes(p) ? view(p) : {});

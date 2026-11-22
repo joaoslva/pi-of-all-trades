@@ -17,7 +17,7 @@ const h = (tag, attrs = {}, ...kids) => {
   return el;
 };
 
-let token = store.get(), view = null, receivedAt = 0, es = null, refusal = null, showHistory = false, history = null;
+let token = store.get(), view = null, receivedAt = 0, es = null, refusal = null, showHistory = false, history = null, showSettings = false;
 let secretNode = null, secretKey = "", armedRound = 0, revealTimer = 0;
 
 async function api(path, body) {
@@ -64,7 +64,7 @@ function renderBar(v) {
     p.connected === false ? h("div", { class: "away" }, "away") : null);
   bar.replaceChildren(
     side(v.you, "l"),
-    h("div", { class: "mid" }, `Round ${v.round} / ${v.rounds}`,
+    h("div", { class: "mid" }, `Round ${v.round} / ${v.options.rounds}`,
       v.phase === "playing" ? h("span", { class: "time", id: "timer", "aria-live": "off" }, fmt(remaining())) : null),
     side(v.other, "r"));
 }
@@ -183,24 +183,36 @@ const screens = {
       h("h2", {}, "Take your place"), input, h("p"), h("button", { class: "primary big" }, "Join"));
   },
   lobby(v) {
-    const set = n => act("set_rounds", { rounds: n });
+    const o = v.options;
     const hist = showHistory ? panel(h("h2", {}, "The scroll"), history == null ? h("p", { class: "muted" }, "Unrolling...")
       : history.length === 0 ? h("p", { class: "muted" }, "No games yet.")
       : h("ul", { class: "hist" }, history.map(g => h("li", {}, h("span", {}, g.players.map(p => `${p.name} ${p.score}`).join(" - ")),
         h("span", { class: "muted" }, `${g.rounds}r, ${new Date(g.finished).toLocaleDateString()}`))))) : null;
     return [
       panel(h("h2", {}, "Lobby"), h("p", {}, `${v.you.name} (you)`),
-        h("p", { class: v.other ? "" : "muted" }, v.other ? v.other.name : "Waiting for a second rider...")),
-      panel(h("h2", {}, "Rounds"), h("div", { class: "stepper" },
-        btn("-", () => set(v.rounds - 1), "", { disabled: v.rounds <= 1, "aria-label": "Fewer rounds" }),
-        h("output", {}, String(v.rounds)),
-        btn("+", () => set(v.rounds + 1), "", { disabled: v.rounds >= 10, "aria-label": "More rounds" }))),
+        h("p", { class: v.other ? "" : "muted" }, v.other ? v.other.name : "Waiting for a second rider..."),
+        h("p", { class: "muted summary" }, `${o.rounds} round${o.rounds > 1 ? "s" : ""}, ${fmt(o.seconds * 1000)}, hints ${o.hints ? "on" : "off"}, ${o.pool}`)),
+      btn("Settings", () => { showSettings = true; showHistory = false; render(view); }),
       btn("Start", () => act("start"), "primary big", { disabled: !v.canStart }),
       hist,
       h("div", { class: "row" },
         btn(showHistory ? "Roll up the scroll" : "Past games", toggleHistory, "link"),
         btn("Leave", () => act("leave").then(() => { store.del(); token = null; if (es) es.close(); view = null; render(null); }), "link")),
     ];
+  },
+  settings(v) {
+    const o = v.options, set = x => act("set_options", x);
+    const row = (label, ...kids) => h("div", { class: "opt", role: "group", "aria-label": label }, h("span", {}, label), h("div", { class: "seg" }, ...kids));
+    const choice = (key, val, label) => btn(label, () => set({ [key]: val }), "", { "aria-pressed": String(o[key] === val) });
+    return panel(h("h2", {}, "Settings"),
+      row("Rounds",
+        btn("-", () => set({ rounds: o.rounds - 1 }), "", { disabled: o.rounds <= 1, "aria-label": "Fewer rounds" }),
+        h("output", {}, String(o.rounds)),
+        btn("+", () => set({ rounds: o.rounds + 1 }), "", { disabled: o.rounds >= 10, "aria-label": "More rounds" })),
+      row("Length", choice("seconds", 120, "2:00"), choice("seconds", 180, "3:00"), choice("seconds", 300, "5:00")),
+      row("Hints", btn(o.hints ? "On" : "Off", () => set({ hints: !o.hints }), "", { "aria-pressed": String(o.hints), "aria-label": "Hints" })),
+      row("Pool", choice("pool", "all", "All"), choice("pool", "riders", "Riders"), choice("pool", "dragons", "Dragons")),
+      btn("Back", () => { showSettings = false; render(view); }, "big"));
   },
   drawing(v) {
     if (!v.drawn.you) armedRound = v.round;
@@ -250,7 +262,8 @@ function render(v) {
   }
   if (!v) { screen.replaceChildren(screens.join()); return; }
   if (!(v.phase === "drawing" || v.phase === "playing")) { stopReveal(); secretNode = null; secretKey = ""; }
-  const out = screens[v.phase](v);
+  if (v.phase !== "lobby") showSettings = false;
+  const out = screens[showSettings ? "settings" : v.phase](v);
   screen.replaceChildren(...[out].flat().filter(Boolean));
 }
 

@@ -73,6 +73,25 @@ await A.fill("input", "Ana"); await A.click("text=Join");
 await A.waitForSelector("text=Waiting for a second rider"); await shot(A, "02a-lobby-alone"); await fitsPhones(A, "lobby one player", true);
 await B.fill("input", "Bo"); await B.click("text=Join");
 await A.waitForSelector("text=Bo"); await shot(A, "02-lobby"); await fitsPhones(A, "lobby", true);
+
+// settings: either phone changes the options, the other sees them live
+const summary = p => p.locator(".summary").innerText();
+const pressed = p => p.locator('#screen [aria-pressed="true"]').allInnerTexts();
+const tap = (p, label) => p.click(`#screen button:text-is("${label}")`);
+assert.equal(await summary(B), "3 rounds, 3:00, hints on, all"); ok("lobby summary shows the defaults");
+await tap(A, "Settings"); await A.waitForSelector("text=Length"); await tap(B, "Settings");
+assert.deepEqual(await pressed(A), ["3:00", "On", "All"]); ok("settings: defaults pressed");
+assert.equal(await A.locator("#screen button:visible").count(), 10); ok("settings: 10 controls (stepper, 3 lengths, hints, 3 pools, back)");
+await fitsPhones(A, "settings", true);
+await tap(A, "2:00"); await tap(A, "Dragons"); await A.click('button[aria-label="Hints"]'); await A.click('[aria-label="More rounds"]');
+await B.waitForSelector('button[aria-label="Hints"][aria-pressed="false"]');
+await B.waitForFunction(() => document.querySelector("#screen output")?.textContent === "4");
+assert.deepEqual(await pressed(B), ["2:00", "Dragons"]); ok("A's changes show on B's settings screen");
+await fitsPhones(B, "settings changed", true);
+await tap(B, "Back"); assert.equal(await summary(B), "4 rounds, 2:00, hints off, dragons"); ok("B's lobby summary reflects the settings");
+await tap(A, "3:00"); await tap(A, "All"); await A.click('button[aria-label="Hints"]'); await A.click('[aria-label="Fewer rounds"]');
+await B.waitForFunction(() => document.querySelector(".summary")?.textContent === "3 rounds, 3:00, hints on, all"); ok("changes back to defaults reach B's lobby");
+await tap(A, "Back"); await A.waitForSelector(".summary");
 await A.click("text=Past games"); await A.waitForSelector("text=No games yet."); await shot(A, "03-history"); await fitsPhones(A, "history", false);
 await A.click("text=Roll up the scroll");
 await A.click("text=Start");
@@ -166,6 +185,16 @@ await shot(A, "14-final-timeout");
 await shot(A, "15-final-A"); await shot(B, "15-final-B"); await fitsPhones(A, "final", true);
 await B.click("text=Back to lobby"); await A.waitForSelector("text=Start"); 
 await A.click("text=Past games"); await A.waitForSelector(".hist"); await shot(A, "16-history-with-game"); await fitsPhones(A, "history with a game", false);
+
+// hints off: no Hint button and no tips on either phone; options survived back_to_lobby
+await A.click("text=Roll up the scroll");
+assert.equal(await summary(A), "3 rounds, 3:00, hints on, all");
+await tap(A, "Settings"); await A.click('button[aria-label="Hints"]'); await A.waitForSelector('button[aria-label="Hints"][aria-pressed="false"]'); await tap(A, "Back");
+await B.waitForFunction(() => document.querySelector(".summary")?.textContent === "3 rounds, 3:00, hints off, all");
+await A.click("text=Start"); await A.click("text=Draw your character"); await B.click("text=Draw your character");
+await A.waitForSelector(".time"); await B.waitForSelector(".time");
+assert.deepEqual([await A.locator(".hints, button.hint").count(), await B.locator(".hints, button.hint").count()], [0, 0]); ok("hints off: no Hint button on either phone");
+await shot(B, "16b-playing-hints-off");
 
 // lost banner: offline while open
 await A.context().setOffline(true); await A.evaluate(() => document.getElementById("lost").hidden = false);

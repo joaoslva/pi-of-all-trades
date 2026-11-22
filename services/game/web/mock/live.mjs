@@ -28,7 +28,14 @@ await C.fill("input", "Cy"); await C.click("text=Join");
 await C.waitForSelector("text=dragons have decided");
 ok("third phone refused with the dragons text");
 await A.screenshot({ path: `${OUT}/lobby.png` });
+await A.click('#screen button:text-is("Settings")');
 for (let n = 2; n >= ROUNDS; n--) { await A.click('[aria-label="Fewer rounds"]'); await A.waitForFunction(n => document.querySelector("output")?.textContent === String(n), n); }
+await A.click('button:text-is("2:00")'); await A.click('button:text-is("Dragons")');
+await A.waitForSelector('button[aria-pressed="true"]:text-is("Dragons")'); await shots(A, "settings");
+await A.click('button:text-is("Back")');
+const want = `${ROUNDS} round${ROUNDS > 1 ? "s" : ""}, 2:00, hints on, dragons`;
+await B.waitForFunction(w => document.querySelector(".summary")?.textContent === w, want); await shots(B, "lobby-summary");
+ok(`settings on A reach B's lobby: "${want}"`);
 await A.click("text=Start");
 
 for (let round = 1; round <= ROUNDS; round++) {
@@ -40,6 +47,8 @@ for (let round = 1; round <= ROUNDS; round++) {
   await A.waitForSelector(".secret .card:not(.revealing)"); await B.waitForSelector(".secret .card:not(.revealing)");
   await shots(A, `r${round}-A-${sa}`); await shots(B, `r${round}-B-${sb}`);
   assert.ok(sa && sb && sa !== sb, `secrets ${sa} / ${sb}`);
+  assert.deepEqual([await A.locator(".secret .skind").innerText(), await B.locator(".secret .skind").innerText()].map(k => k.toLowerCase()), ["dragon", "dragon"]);
+  assert.match(await A.locator(".time").innerText(), /^(2:00|1:[45]\d)$/); ok("dragons pool, 2:00 round");
   assert.ok(!(await text(A)).includes(sb) && !(await text(B)).includes(sa), "a page shows the other secret");
   ok(`round ${round}: A holds "${sa}", B holds "${sb}", neither page shows the other's`);
   await A.screenshot({ path: `${OUT}/playing-A.png` });
