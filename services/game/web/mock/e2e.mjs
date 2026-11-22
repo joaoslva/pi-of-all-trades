@@ -4,7 +4,7 @@ import { chromium } from "/home/joao/.claude/tools/playwright/node_modules/playw
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 
-const BASE = "http://localhost:18091", OUT = process.argv[2];
+const BASE = process.env.BASE || "http://localhost:18091", OUT = process.argv[2];
 mkdirSync(OUT, { recursive: true });
 await fetch(`${BASE}/mock/reset`);
 const browser = await chromium.launch();
@@ -33,9 +33,24 @@ const fits = async (p, label, vertical) => {
   const { width: w, height: hh } = p.viewportSize();
   const [sw, sh] = await p.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight]);
   assert.ok(sw <= w, `${label}: sideways scroll ${sw}>${w}`);
-  if (vertical) assert.ok(sh <= hh, `${label}: vertical scroll ${sh}>${hh}`);
+  if (vertical) {
+    assert.ok(sh <= hh, `${label}: vertical scroll ${sh}>${hh}`);
+    const covered = await p.evaluate(() => [...document.querySelectorAll("#screen button, #screen input")].filter(e => e.getClientRects().length).filter(e => {
+      const r = e.getBoundingClientRect(), t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return !(t && e.contains(t));
+    }).map(e => e.textContent || e.placeholder));
+    assert.deepEqual(covered, [], `${label}: controls covered or off screen`);
+  }
   ok(`${label}: scroll ${sw}x${sh} in ${w}x${hh}`);
 };
+const anims = p => p.evaluate(() => document.getAnimations().map(a => ({
+  cls: a.effect.target.getAttribute("class"), fire: !!a.effect.target.closest(".hearth"), state: a.playState,
+  props: [...new Set(a.effect.getKeyframes().flatMap(Object.keys))].filter(k => !["offset", "computedOffset", "easing", "composite"].includes(k)),
+})));
+const setHidden = (p, hidden) => p.evaluate(h => {
+  if (h) Object.defineProperty(document, "hidden", { configurable: true, get: () => true }); else delete document.hidden;
+  document.dispatchEvent(new Event("visibilitychange"));
+}, hidden);
 const PHONES = [{ width: 360, height: 640 }, { width: 412, height: 915 }];
 const fitsPhones = async (p, label, vertical) => {
   const back = p.viewportSize();
@@ -47,13 +62,22 @@ const fitsPhones = async (p, label, vertical) => {
 };
 
 const A = await phone(), B = await phone();
-await shot(A, "01-join");
-for (const [p, n] of [[A, "Ana"], [B, "Bo"]]) { await p.fill("input", n); await p.click("text=Join"); }
-await A.waitForSelector("text=Bo"); await shot(A, "02-lobby"); await fitsPhones(A, "lobby", false);
+await shot(A, "01-join"); await fitsPhones(A, "join", true);
+const fire = await anims(A);
+assert.ok(fire.length >= 1 && fire.length <= 6 && fire.every(a => a.fire && a.state === "running"), JSON.stringify(fire));
+assert.deepEqual([...new Set(fire.flatMap(a => a.props))].sort(), ["opacity", "transform"]);
+ok(`join: ${fire.length} running animations, all in the fireplace, animating only opacity and transform`);
+await setHidden(A, true); assert.ok((await anims(A)).every(a => a.state === "paused")); ok("hidden tab: fire paused");
+await setHidden(A, false); assert.ok((await anims(A)).every(a => a.state === "running")); ok("visible again: fire running");
+await A.fill("input", "Ana"); await A.click("text=Join");
+await A.waitForSelector("text=Waiting for a second rider"); await shot(A, "02a-lobby-alone"); await fitsPhones(A, "lobby one player", true);
+await B.fill("input", "Bo"); await B.click("text=Join");
+await A.waitForSelector("text=Bo"); await shot(A, "02-lobby"); await fitsPhones(A, "lobby", true);
 await A.click("text=Past games"); await A.waitForSelector("text=No games yet."); await shot(A, "03-history"); await fitsPhones(A, "history", false);
 await A.click("text=Roll up the scroll");
 await A.click("text=Start");
 await A.waitForSelector("text=Draw your character"); await shot(A, "04-drawing"); await fitsPhones(A, "drawing", true);
+assert.ok((await anims(A)).every(a => !a.fire)); ok("drawing: the fireplace is gone and animates nothing");
 
 // 4: B (no clip) reveals by runes; A (clip) draws mid-animation and must not restart it
 await B.click("text=Draw your character");
@@ -119,6 +143,7 @@ await B.click("text=Next round"); await A.waitForSelector("text=Draw your charac
 await B.emulateMedia({ reducedMotion: "reduce" });
 await B.click("text=Draw your character"); await B.waitForSelector(".secret .card");
 assert.equal(await B.locator(".card.revealing, .r.spin").count(), 0); assert.equal(await timers(B), 1); ok("reduced motion: settled at once, no timer");
+assert.equal((await anims(B)).length, 0); ok("reduced motion: no embers or other animation while playing");
 await B.emulateMedia({ reducedMotion: "no-preference" });
 await A.click("text=Draw your character"); await A.waitForSelector(".card.revealing");
 assert.deepEqual(await cardStyle(A), [rgb("#FFD400"), rgb("#1a0e05")]); ok("Andarna card #FFD400 with dark ink");
@@ -148,8 +173,7 @@ await shot(A, "17-connection-lost"); await A.context().setOffline(false);
 
 // 6: reduced motion
 const normal = await phone(); const reduced = await phone({ width: 412, height: 915 }, { reducedMotion: "reduce" });
-const anim = p => p.evaluate(() => getComputedStyle(document.querySelector(".embers"), "::before").animationName);
-const [an, ar] = [await anim(normal), await anim(reduced)];
-assert.equal(an, "drift"); assert.equal(ar, "none"); ok(`ember animation: normal=${an}, reduced-motion=${ar}`);
+const [an, ar] = [(await anims(normal)).length, (await anims(reduced)).length];
+assert.ok(an > 0); assert.equal(ar, 0); ok(`join animations: normal=${an}, reduced-motion=${ar}`);
 await browser.close();
 console.log("ALL PASS");

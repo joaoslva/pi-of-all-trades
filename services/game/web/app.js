@@ -240,6 +240,7 @@ async function toggleHistory() {
 }
 
 function render(v) {
+  document.body.classList.toggle("home", !v || v.phase === "lobby");
   renderBar(v);
   const screen = $("screen");
   if (refusal) {
@@ -273,6 +274,28 @@ setInterval(() => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" fill="none" stroke="${ink}" stroke-width="4">${g}</svg>`;
   document.body.style.setProperty("--runes", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
 })();
+
+// Staggered rows of jittered stones in a 160x120 tile; a row's first stone is drawn again past the right edge so the tile wraps.
+(function cobbleWall() {
+  let seed = 7, g = "";
+  const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647, j = v => (v + rnd() * 3 - 1.5).toFixed(1);
+  const stone = (x, y, w, k) => g += `<path fill="url(#s${k})" d="M${j(x + 2)} ${j(y + 2)}L${j(x + w / 2)} ${j(y + 1)}L${j(x + w - 2)} ${j(y + 2)}L${j(x + w - 1)} ${j(y + 15)}L${j(x + w - 2)} ${j(y + 28)}L${j(x + w / 2)} ${j(y + 29)}L${j(x + 2)} ${j(y + 28)}L${j(x + 1)} ${j(y + 15)}Z"/>`;
+  for (let y = 0; y < 120; y += 30) {
+    const x0 = -rnd() * 30, end = x0 + 160;
+    for (let x = x0, first = true; x < end - 1; first = false) {
+      let w = 28 + rnd() * 26;
+      if (end - x - w < 28) w = end - x;
+      const k = Math.floor(rnd() * 3);
+      stone(x, y, w, k);
+      if (first) stone(x + 160, y, w, k);
+      x += w;
+    }
+  }
+  const grad = (k, a, b) => `<linearGradient id="s${k}" x2=".3" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120" stroke-linejoin="round">${grad(0, "#4b3f36", "#2c241f")}${grad(1, "#574a3e", "#342b24")}${grad(2, "#43392f", "#272019")}${g}</svg>`;
+  document.body.style.setProperty("--cobble", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+})();
+document.addEventListener("visibilitychange", () => document.body.classList.toggle("asleep", document.hidden));
 
 render(null);
 if (token) join("");

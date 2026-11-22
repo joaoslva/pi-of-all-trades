@@ -19,6 +19,21 @@
   </header>
   <section id="bar" class="bar" hidden aria-label="Scoreboard"></section>
   <section id="screen" class="screen"></section>
+  <div class="hearth" aria-hidden="true">
+    <svg class="arms" viewBox="0 0 60 100">
+      <defs>
+        <linearGradient id="steel" x2="1"><stop offset="0" stop-color="#9aa0a6"/><stop offset=".5" stop-color="#e6e8ea"/><stop offset="1" stop-color="#5d6268"/></linearGradient>
+        <symbol id="sword" viewBox="0 0 16 100"><path d="M8 0l4 8v60H4V8z" fill="url(#steel)"/><path d="M8 4v62" stroke="#6d7278"/><rect x="0" y="67" width="16" height="4" rx="2" fill="#b08a3e"/><rect x="6" y="71" width="4" height="20" fill="#8a5a34"/><circle cx="8" cy="94" r="4" fill="#b08a3e"/></symbol>
+      </defs>
+      <use href="#sword" x="22" width="16" height="100" transform="rotate(-28 30 50)"/>
+      <use href="#sword" x="24" y="30" width="12" height="62" transform="rotate(30 30 61)"/>
+    </svg>
+    <div class="firebox"><i class="f f1"></i><i class="f f2"></i><i class="f f3"></i><i class="f f4"></i><i class="f f5"></i>
+      <svg class="logs" viewBox="0 0 100 20"><rect x="8" y="6" width="58" height="11" rx="5" fill="#3a2114" transform="rotate(8 37 11)"/><rect x="34" y="5" width="58" height="11" rx="5" fill="#2c1810" transform="rotate(-9 63 10)"/></svg>
+    </div>
+    <svg class="arms" viewBox="0 0 60 100"><path d="M8 18h44v30c0 24-22 38-22 38S8 72 8 48z" fill="#5b1418" stroke="#b08a3e" stroke-width="3"/><path d="M30 22v60M12 40h36" stroke="#b08a3e" stroke-width="2"/><circle cx="30" cy="40" r="5" fill="url(#steel)"/></svg>
+    <i class="glow"></i>
+  </div>
 </main>
 <script src="runes.js"></script>
 <script src="app.js"></script>
