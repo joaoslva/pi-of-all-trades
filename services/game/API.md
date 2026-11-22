@@ -18,7 +18,7 @@ Port 8090, plain HTTP. Binary `guessing-day`. Flags: `-listen :8090`, `-data /va
 `lobby` -> `drawing` -> `playing` -> `roundEnd` -> (`drawing` again, or `final`) -> `lobby` (back_to_lobby).
 
 - lobby: players join, either may set rounds, either may `start` once 2 players are present.
-- drawing: server picks one secret per player, distinct from each other and from every earlier round of this game. Each player taps `draw` to reveal their own secret. Playing starts when both have drawn.
+- drawing: server picks one secret per player from a shuffle bag. The two are distinct, and a rider is never paired with their own `partner`. The bag keeps every character drawn since its last refill, across games and (via `history.jsonl`) across restarts, so consecutive games do not repeat characters. When a game starts and the bag has fewer free characters than the game needs, it refills, so no character repeats within one game. `start` returns `400 rounds` if the deck cannot cover the rounds (fewer than 2 characters per round). Each player taps `draw` to reveal their own secret. Playing starts when both have drawn.
 - playing: timer runs. Each player resolves their own guess with `got_it` or `forfeit`. Timeout counts as forfeit for whoever is unresolved. The phase ends when both are resolved.
 - roundEnd: scores updated, both secrets revealed to both. Either player taps `next` (idempotent, the first tap wins). After the last round the phase is `final`.
 - final: scoreboard, winner or tie. Either player `back_to_lobby` (scores reset, players stay).
@@ -38,7 +38,7 @@ All JSON. Errors are `{"error":"code","message":"text"}` with a 4xx status.
   - `leave` in the lobby removes the player. During a game it aborts the game back to the lobby with scores reset, for the player who stays.
 - `GET /api/history` -> last 20 finished games, newest first: `[{"finished":"RFC3339","rounds":3,"players":[{"name":"A","score":5},{"name":"B","score":4}]}]`.
 - `GET /m/<opaque>/clip` and `GET /m/<opaque>/poster` serve media. `<opaque>` comes only from the holder's own `secret` and dies when the round ends (404 after).
-- Anything else serves the static `-web` dir.
+- Anything else serves the static `-web` dir with `Cache-Control: no-cache` (phones revalidate and get a 304, so a deploy shows up on the next load).
 
 ## View (per player, never contains the other player's secret before roundEnd)
 
@@ -54,23 +54,25 @@ All JSON. Errors are `{"error":"code","message":"text"}` with a 4xx status.
   "drawn":    {"you": true, "other": false},
   "resolved": {"you": null, "other": "got_it"},
   "deadline": 1760000180000,
-  "secret": {"name": "Tairn", "kind": "dragon", "clip": "/m/9f2c.../clip", "poster": "/m/9f2c.../poster"},
-  "reveal": {"yourGuess": {"name": "Violet Sorrengail", "kind": "rider"}, "theirGuess": {"name": "Tairn", "kind": "dragon"}},
+  "secret": {"name": "Tairn", "kind": "dragon", "color": "#1b1b1b", "clip": "/m/9f2c.../clip", "poster": "/m/9f2c.../poster", "tips": ["vague", "more specific"]},
+  "reveal": {"yourGuess": {"name": "Violet Sorrengail", "kind": "rider", "color": "#1b1b1b"}, "theirGuess": {"name": "Tairn", "kind": "dragon", "color": "#1b1b1b"}},
   "gain": {"you": 2, "other": 0},
   "final": {"winner": "A", "tie": false}
 }
 ```
 
 - `other` is null in the lobby until someone joins. `deadline` is unix ms, only in `playing`. Clients compute remaining time with `deadline - (serverNow + elapsedSinceReceipt)`.
-- `secret` is present only for the holder, only after they sent `draw`, only until roundEnd. `clip` and `poster` are omitted when the character has no media. A client with no clip shows the CSS reveal.
+- `secret` is present only for the holder, only after they sent `draw`, only until roundEnd. `clip` and `poster` are omitted when the character has no media. `tips` (hints for the holder, vague to specific) appears only here, never in `reveal`. `color` (the card frame, `#rrggbb`) is in `secret` and in both `reveal` entries, omitted when the character has none. A client with no clip shows the CSS reveal.
 - `resolved.you` / `resolved.other` is `null`, `"got_it"` or `"forfeit"`.
 - `reveal` and `gain` only in `roundEnd` and `final`. `final` only in `final`.
 - `round` counts from 1. `rounds` is the lobby setting.
 
 ## Content
 
-`content/characters.json` is an array of `{id, name, kind, partner, books, importance, confidence, source, notes?, clip?, poster?}`. Only `id`, `name`, `kind` matter to the game. `kind` is `rider`, `dragon` or `other`. `clip` and `poster` are file names under `content/media/`, optional. The server maps each `(round, player)` to a random opaque token. File names and character ids never reach the other player.
+`content/characters.json` is an array of `{id, name, kind, partner, color?, tips?, books, importance, confidence, source, notes?, clip?, poster?}`. The game reads `id`, `name`, `kind`, `partner` (the bag never pairs a rider with their partner), `color`, `tips`, `clip` and `poster`. `kind` is `rider`, `dragon` or `other`. `clip` and `poster` are file names under `content/media/`, optional. The server maps each `(round, player)` to a random opaque token. File names and character ids never reach the other player.
 
 ## History file
 
-On entering `final`, append one JSON line (same object as `/api/history`) to `<data>/history.jsonl`. Never write on any other event.
+On entering `final`, append one JSON line to `<data>/history.jsonl`: the `/api/history` object plus `"chars": ["id", ...]`, every secret id of that game in draw order. Never write on any other event. `/api/history` never shows `chars`.
+
+On startup the server reads the file (missing file, blank or corrupt lines, and old lines without `chars` are skipped), takes the last 20 games, and seeds the bag with their ids, newest first, stopping while at least one default game's worth (6) of characters stays free.

@@ -19,8 +19,9 @@ services/game/
 - Two players at most. A third, or anyone joining mid-game, gets "The dragons have decided not to bond with you. Try again next year...".
 - No accounts. A random token in the phone's `localStorage` lets a phone rejoin after a screen lock or a Wi-Fi blip.
 - A correct guess scores 1, plus 2 in the first third of the 180 s round, plus 1 in the second third. A forfeit or timeout scores 0. Constants are in `game.go`.
-- The guesser's view never contains the holder's secret: not the name, the id, nor the clip path. `TestNoLeakBeforeRoundEnd` fails if it does.
-- `history.jsonl` in the data dir gets one line when a game ends, and nothing else writes to the SD card.
+- Characters come from a shuffle bag that is not reset between games: back-to-back games do not repeat a character until the deck runs low, and none repeats within one game. The bag is rebuilt from `history.jsonl` after a restart. A rider and their own partner dragon are never drawn in the same round.
+- The guesser's view never contains the holder's secret: not the name, the id, the clip path, the colour, the partner nor the tips. `TestNoLeakBeforeRoundEnd` fails if it does.
+- `history.jsonl` in the data dir gets one line when a game ends (scores, plus the secret ids that seed the bag; `/api/history` hides the ids), and nothing else writes to the SD card.
 
 ## Characters and clips
 
