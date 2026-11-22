@@ -539,59 +539,6 @@
   "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
  },
  {
-  "id": "aura",
-  "name": "Aura Beinhaven",
-  "kind": "rider",
-  "partner": "dagolh",
-  "books": [
-   1,
-   2
-  ],
-  "importance": 1,
-  "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
- },
- {
-  "id": "dagolh",
-  "name": "Dagolh",
-  "kind": "dragon",
-  "partner": "aura",
-  "books": [
-   1,
-   2
-  ],
-  "importance": 1,
-  "confidence": "verified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/"
- },
- {
-  "id": "theophanie",
-  "name": "Theophanie",
-  "kind": "other",
-  "partner": null,
-  "books": [
-   2,
-   3
-  ],
-  "importance": 2,
-  "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
- },
- {
-  "id": "halden",
-  "name": "Halden Tauri",
-  "kind": "other",
-  "partner": null,
-  "books": [
-   1,
-   2,
-   3
-  ],
-  "importance": 2,
-  "confidence": "unverified",
-  "source": "https://theliterarylifestyle.com/onyx-storm-dragons/ ; https://www.empyreanriders.com/articles/guide-to-onyx-storm-characters-dragons-signets/ (single/partial support)"
- },
- {
   "id": "catriona",
   "name": "Catriona Cordella",
   "kind": "other",
