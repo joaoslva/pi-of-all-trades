@@ -18,7 +18,7 @@ const h = (tag, attrs = {}, ...kids) => {
 };
 
 let token = store.get(), view = null, receivedAt = 0, es = null, refusal = null, showHistory = false, history = null;
-let secretNode = null, secretKey = "";
+let secretNode = null, secretKey = "", armedRound = 0, revealTimer = 0;
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined);
@@ -69,26 +69,103 @@ function renderBar(v) {
     side(v.other, "r"));
 }
 
+const lum = hex => {
+  const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(x => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+// Ink is whichever of --on-gold and --text contrasts more with the card; mock/check-contrast.mjs runs this rule over every real colour.
+const darkInk = c => (lum(c) + 0.05) ** 2 > (lum("#1a0e05") + 0.05) * (lum("#f3e5c8") + 0.05);
+const FRAME = '<svg class="frame" viewBox="0 0 1080 1512" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="M481 60H204L60 204V651L165 756L60 861V1308L204 1452H876L1020 1308V861L915 756L1020 651V204L876 60H599M483 60L603 180L540 244L476 180L596 60M56 704L108 756L56 808M1024 704L972 756L1024 808"/>'
+  + '<path d="M540 138L582 180L540 222L498 180Z" fill="currentColor" stroke="none"/></svg>';
+const card = (c, ...kids) => {
+  const el = h("div", { class: `card${c.color && darkInk(c.color) ? " ink-dark" : ""}`, style: c.color ? `--c:${c.color}` : null }, ...kids);
+  el.insertAdjacentHTML("afterbegin", FRAME);
+  return el;
+};
+
+const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+function runeRow(name) {
+  const letters = [];
+  const row = h("div", { class: "runes", "aria-hidden": "true" }, name.split(" ").map(w => h("span", { class: "word" }, [...w].map(ch => {
+    const s = h("span", { class: "r" });
+    s.innerHTML = runeSvg(ch);
+    letters.push([s, ch]);
+    return s;
+  }))));
+  return { row, letters };
+}
+
+function startReveal(el, letters) {
+  const n = letters.length, total = Math.min(3500, 1600 + n * 90), step = (total - 900) / n, t0 = performance.now();
+  el.classList.add("revealing");
+  letters.forEach(([s]) => s.classList.add("spin"));
+  const tick = () => {
+    const t = performance.now() - t0;
+    letters.forEach(([s, ch], i) => {
+      if (!s.classList.contains("spin")) return;
+      const settled = t >= 600 + (i + 1) * step;
+      s.innerHTML = runeSvg(settled ? ch : ABC[Math.floor(Math.random() * 26)]);
+      if (settled) s.classList.remove("spin");
+    });
+    if (t >= total) stopReveal();
+  };
+  revealTimer = setInterval(tick, 70);
+  tick();
+}
+function stopReveal() {
+  clearInterval(revealTimer); revealTimer = 0;
+  if (secretNode) secretNode.querySelector(".card").classList.remove("revealing");
+}
+
+function hints(tips, key) {
+  let n = 0;
+  try { const t = JSON.parse(sessionStorage.getItem("gameTips")); if (t && t.k === key) n = t.n; } catch { /* no storage: tips reset on reload */ }
+  const list = h("ol", { class: "tips", "aria-live": "polite" });
+  const more = btn("", () => {
+    n++;
+    try { sessionStorage.setItem("gameTips", JSON.stringify({ k: key, n })); } catch { /* kept in memory for this page only */ }
+    draw();
+  }, "hint");
+  const draw = () => {
+    list.replaceChildren(...tips.slice(0, n).map(t => h("li", {}, t)));
+    more.textContent = `Hint (${tips.length - n} left)`;
+    more.hidden = n >= tips.length;
+  };
+  draw();
+  return h("div", { class: "hints" }, list, more);
+}
+
 function secretCard(v) {
   const s = v.secret, key = `${v.round}:${s.name}`;
-  if (secretNode && secretKey === key) return secretNode;
-  secretKey = key;
-  const stage = h("div", { class: "stage" });
-  const holdPoster = () => stage.replaceChildren(s.poster ? h("img", { src: s.poster, alt: "" }) : h("div", { class: "flame" }, s.name));
-  if (s.clip) {
-    const video = h("video", { src: s.clip, poster: s.poster, muted: true, playsinline: true, autoplay: true, "aria-hidden": "true" });
-    video.muted = true; // the attribute alone is not honoured for autoplay in every browser
-    video.addEventListener("ended", holdPoster);
-    video.addEventListener("error", () => stage.replaceChildren(h("div", { class: "flame" }, s.name)));
-    stage.append(video);
-  } else stage.append(h("div", { class: "flame" }, s.name));
-  const body = h("div", { class: "sbody" }, stage, h("div", { class: "sname" }, s.name), h("div", { class: "skind" }, s.kind));
-  const toggle = h("button", { "aria-expanded": "true", onclick: () => {
-    const c = secretNode.classList.toggle("collapsed");
-    toggle.setAttribute("aria-expanded", String(!c));
-    toggle.lastChild.textContent = c ? "show" : "hide";
-  } }, h("span", {}, "Your secret"), h("span", {}, "hide"));
-  secretNode = h("div", { class: "secret" }, toggle, body);
+  if (!secretNode || secretKey !== key) {
+    stopReveal();
+    secretKey = key;
+    const { row, letters } = runeRow(s.name);
+    let face = row;
+    if (s.clip) {
+      const stage = h("div", { class: "stage" });
+      const fallback = () => stage.replaceWith(row);
+      const video = h("video", { src: s.clip, poster: s.poster, muted: true, playsinline: true, autoplay: true, "aria-hidden": "true" });
+      video.muted = true; // the attribute alone is not honoured for autoplay in every browser
+      video.addEventListener("ended", () => s.poster ? stage.replaceChildren(h("img", { src: s.poster, alt: "" })) : fallback());
+      video.addEventListener("error", fallback);
+      stage.append(video);
+      face = stage;
+    }
+    const front = card(s, h("div", { class: "skind" }, s.kind), face, h("div", { class: "sname" }, s.name));
+    const body = h("div", { class: "sbody" }, front, s.tips ? hints(s.tips, key) : null);
+    const toggle = h("button", { "aria-expanded": "true", onclick: () => {
+      const c = secretNode.classList.toggle("collapsed");
+      toggle.setAttribute("aria-expanded", String(!c));
+      toggle.lastChild.textContent = c ? "show" : "hide";
+    } }, h("span", {}, "Your secret"), h("span", {}, "hide"));
+    secretNode = h("div", { class: "secret" }, toggle, body);
+    // Animate only a draw this page saw happen: a reload mid-round shows the settled card.
+    if (!s.clip && armedRound === v.round && !matchMedia("(prefers-reduced-motion: reduce)").matches) startReveal(front, letters);
+  }
+  const hb = secretNode.querySelector(".hints");
+  if (hb) hb.hidden = v.phase !== "playing";
   return secretNode;
 }
 
@@ -96,8 +173,8 @@ const btn = (label, onclick, cls = "", extra = {}) => h("button", { class: cls, 
 const panel = (...kids) => h("div", { class: "panel" }, ...kids);
 
 const reveals = v => h("div", { class: "verdict" },
-  panel(h("small", {}, "You guessed"), h("strong", {}, v.reveal.yourGuess.name), h("small", {}, v.reveal.yourGuess.kind), h("p", {}, `+${v.gain.you}`)),
-  panel(h("small", {}, `${v.other.name} guessed`), h("strong", {}, v.reveal.theirGuess.name), h("small", {}, v.reveal.theirGuess.kind), h("p", {}, `+${v.gain.other}`)));
+  [[v.reveal.yourGuess, "You guessed", v.gain.you], [v.reveal.theirGuess, `${v.other.name} guessed`, v.gain.other]].map(([c, label, gain]) =>
+    panel(h("small", {}, label), card(c, h("div", { class: "skind" }, c.kind), h("strong", { class: "sname" }, c.name)), h("p", {}, `+${gain}`))));
 
 const screens = {
   join() {
@@ -126,6 +203,7 @@ const screens = {
     ];
   },
   drawing(v) {
+    if (!v.drawn.you) armedRound = v.round;
     return [
       v.drawn.you ? secretCard(v) : panel(h("h2", {}, "A new round"), h("p", { class: "muted" }, "Your secret is waiting. Keep it from the other player."),
         btn("Draw your character", () => act("draw"), "primary big")),
@@ -170,7 +248,7 @@ function render(v) {
     return;
   }
   if (!v) { screen.replaceChildren(screens.join()); return; }
-  if (!(v.phase === "drawing" || v.phase === "playing")) { secretNode = null; secretKey = ""; }
+  if (!(v.phase === "drawing" || v.phase === "playing")) { stopReveal(); secretNode = null; secretKey = ""; }
   const out = screens[v.phase](v);
   screen.replaceChildren(...[out].flat().filter(Boolean));
 }
