@@ -29,20 +29,31 @@ const cardStyle = (p, sel = ".secret .card") => p.locator(sel).first().evaluate(
 const settled = p => p.locator(".secret .r:not(.spin)").count();
 const timers = p => p.evaluate(() => window.liveTimers());
 const fits = async (p, label, vertical) => {
-  const [sw, sh, w, hh] = await p.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight, innerWidth, innerHeight]);
+  // Against the configured size: a mobile layout viewport widens to fit overflowing content, so innerWidth would hide it.
+  const { width: w, height: hh } = p.viewportSize();
+  const [sw, sh] = await p.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight]);
   assert.ok(sw <= w, `${label}: sideways scroll ${sw}>${w}`);
   if (vertical) assert.ok(sh <= hh, `${label}: vertical scroll ${sh}>${hh}`);
   ok(`${label}: scroll ${sw}x${sh} in ${w}x${hh}`);
+};
+const PHONES = [{ width: 360, height: 640 }, { width: 412, height: 915 }];
+const fitsPhones = async (p, label, vertical) => {
+  const back = p.viewportSize();
+  for (const s of PHONES) {
+    await p.setViewportSize(s); await fits(p, `${label} ${s.width}x${s.height}`, vertical);
+    await shot(p, `fit-${label.replace(/\W+/g, "-")}-${s.width}x${s.height}`);
+  }
+  await p.setViewportSize(back);
 };
 
 const A = await phone(), B = await phone();
 await shot(A, "01-join");
 for (const [p, n] of [[A, "Ana"], [B, "Bo"]]) { await p.fill("input", n); await p.click("text=Join"); }
-await A.waitForSelector("text=Bo"); await shot(A, "02-lobby");
-await A.click("text=Past games"); await A.waitForSelector("text=No games yet."); await shot(A, "03-history");
+await A.waitForSelector("text=Bo"); await shot(A, "02-lobby"); await fitsPhones(A, "lobby", false);
+await A.click("text=Past games"); await A.waitForSelector("text=No games yet."); await shot(A, "03-history"); await fitsPhones(A, "history", false);
 await A.click("text=Roll up the scroll");
 await A.click("text=Start");
-await A.waitForSelector("text=Draw your character"); await shot(A, "04-drawing");
+await A.waitForSelector("text=Draw your character"); await shot(A, "04-drawing"); await fitsPhones(A, "drawing", true);
 
 // 4: B (no clip) reveals by runes; A (clip) draws mid-animation and must not restart it
 await B.click("text=Draw your character");
@@ -73,6 +84,7 @@ assert.equal(await B.locator(".card.revealing").count(), 0); assert.equal(await 
 assert.equal(await B.locator(".tips li").count(), 1); await B.waitForSelector("text=Hint (2 left)"); ok("reload: settled card, no animation, revealed tip kept");
 await B.click("text=Hint (2 left)"); await B.click("text=Hint (1 left)");
 assert.equal(await B.locator(".tips li").count(), 3); assert.equal(await B.locator("button.hint:visible").count(), 0); ok("all tips shown, Hint gone");
+await fitsPhones(B, "playing, three tips open", true);
 await A.waitForSelector(".stage img", { timeout: 5000 }); ok("after the clip ends A holds the poster");
 await A.waitForSelector(".time"); await shot(A, "07-playing-A"); await shot(B, "07-playing-B");
 await B.setViewportSize({ width: 360, height: 640 }); await shot(B, "07-playing-B-tips-360x640"); await B.setViewportSize({ width: 412, height: 915 });
@@ -81,7 +93,7 @@ await B.setViewportSize({ width: 360, height: 640 }); await shot(B, "07-playing-
 const tA = await text(A), tB = await text(B);
 assert.ok(tA.includes("Tairn") && !tA.includes("Violet Sorrengail")); assert.ok(tB.includes("Violet Sorrengail") && !tB.includes("Tairn"));
 ok("playing: A shows only Tairn, B shows only Violet Sorrengail");
-await A.click(".secret > button"); assert.ok(await A.locator(".secret.collapsed").count()); await shot(A, "08-secret-collapsed"); await A.click(".secret > button");
+await A.click(".secret > button"); assert.ok(await A.locator(".secret .card").isHidden()); ok("Hide hides the card"); await shot(A, "08-secret-collapsed"); await A.click(".secret > button");
 
 // 2: fit
 await fits(A, "playing 412x915", true);
@@ -92,7 +104,7 @@ await A.setViewportSize({ width: 412, height: 915 });
 // A got it, B forfeits
 await A.click("text=Got it"); await A.waitForSelector("text=You got it"); await shot(A, "11-playing-resolved");
 await B.waitForSelector("text=Ana got it"); await B.click("text=Forfeit");
-await A.waitForSelector("text=Next round"); await shot(A, "12-roundEnd-A"); await shot(B, "12-roundEnd-B");
+await A.waitForSelector("text=Next round"); await shot(A, "12-roundEnd-A"); await shot(B, "12-roundEnd-B"); await fitsPhones(A, "roundEnd", true);
 assert.ok((await text(A)).includes("Violet Sorrengail")); ok("roundEnd reveals the other secret");
 assert.equal(await B.locator(".tips, .hint").count(), 0); ok("no tips at roundEnd");
 assert.deepEqual(await cardStyle(A, ".verdict .card"), [rgb("#1F2421"), rgb("#f3e5c8")]); ok("roundEnd cards carry the reveal colour");
@@ -100,7 +112,7 @@ assert.deepEqual([await timers(A), await timers(B)], [1, 1]); ok("roundEnd: no r
 
 // refusal for a third phone
 const C = await phone(); await C.fill("input", "Late"); await C.click("text=Join");
-await C.waitForSelector(".refused"); await shot(C, "13-refused"); ok("third player refused: " + (await C.locator(".refused p").innerText()));
+await C.waitForSelector(".refused"); await shot(C, "13-refused"); await fitsPhones(C, "refused", true); ok("third player refused: " + (await C.locator(".refused p").innerText()));
 
 // round 2: B reduced motion, A animates, then A reloads mid-round
 await B.click("text=Next round"); await A.waitForSelector("text=Draw your character");
@@ -121,14 +133,14 @@ await A.waitForSelector("text=Next round"); await A.click("text=Next round");
 await A.click("text=Draw your character"); await B.click("text=Draw your character");
 await A.waitForSelector(".time"); await B.waitForSelector(".card.revealing");
 assert.deepEqual(await cardStyle(B), [rgb("#3b3540"), rgb("#f3e5c8")]); ok("other: neutral stone card, light ink");
-await B.setViewportSize({ width: 360, height: 640 }); await shot(B, "13c-long-name-mid-360x640"); await fits(B, "long name 360x640", true);
+await B.setViewportSize({ width: 360, height: 640 }); await shot(B, "13c-long-name-mid-360x640"); await fitsPhones(B, "long name with Hint", true);
 await B.waitForSelector(".secret .card:not(.revealing)", { timeout: 4000 }); await shot(B, "13d-long-name-settled-360x640"); await B.setViewportSize({ width: 412, height: 915 });
 await A.waitForSelector("text=Back to lobby", { timeout: 15000 }); ok("timeout: nobody pressed, round ended by the clock");
 assert.match(await A.locator(".verdict").innerText(), /\+0[\s\S]*\+0/); ok("timeout gains are +0 and +0");
 await shot(A, "14-final-timeout");
-await shot(A, "15-final-A"); await shot(B, "15-final-B");
+await shot(A, "15-final-A"); await shot(B, "15-final-B"); await fitsPhones(A, "final", true);
 await B.click("text=Back to lobby"); await A.waitForSelector("text=Start"); 
-await A.click("text=Past games"); await A.waitForSelector(".hist"); await shot(A, "16-history-with-game");
+await A.click("text=Past games"); await A.waitForSelector(".hist"); await shot(A, "16-history-with-game"); await fitsPhones(A, "history with a game", false);
 
 // lost banner: offline while open
 await A.context().setOffline(true); await A.evaluate(() => document.getElementById("lost").hidden = false);

@@ -18,6 +18,8 @@ const pairs = [
   ["on-gold", "gold", T], ["on-gold", "btnTop", T],
   ["danger-ink", "danger-bg", T], ["danger-ink", "panel", T], ["ok-ink", "bg", T],
   ["field", "panel", UI], ["field", "bg", UI],
+  // Text that sits on the page, not a panel, can land on a background rune stroke.
+  ["text", "rune-ink", T], ["muted", "rune-ink", T], ["gold", "rune-ink", T], ["ok-ink", "rune-ink", T],
 ];
 // Same rule as darkInk in app.js: the ink with the higher ratio.
 const chars = JSON.parse(readFileSync(process.argv[3] || fileURLToPath(new URL("../../content/characters.json", import.meta.url)), "utf8"));
