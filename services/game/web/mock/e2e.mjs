@@ -145,7 +145,9 @@ await B.waitForFunction(() => document.querySelector(".summary")?.textContent ==
 await tap(A, "Back"); await A.waitForSelector(".summary");
 await A.click("text=Past games"); await A.waitForSelector("text=No games yet."); await shot(A, "03-history"); await fitsPhones(A, "history", false);
 await A.click("text=Roll up the scroll");
-await A.click("text=Start");
+await A.click("text=Start"); await A.waitForSelector("#fly:not([hidden])", { state: "attached" }); ok("the dragon shadow crosses on a screen change");
+await A.evaluate(() => document.getAnimations().filter(a => a.effect.getTiming().iterations !== Infinity).forEach(a => a.finish())); // the animation ending before the swap timer must still paint the new screen
+await A.waitForSelector("text=Draw your character", { timeout: 300 }); assert.equal(await A.locator("#fly").isHidden(), true); ok("sweep ended early: the new screen is painted, the overlay is gone");
 await A.waitForSelector("text=Draw your character"); await shot(A, "04-drawing"); await fitsPhones(A, "drawing", true);
 assert.equal(await end(A).innerText(), "End game"); ok("drawing: End game shown");
 assert.ok((await anims(A)).every(a => !a.fire)); ok("drawing: the fireplace is gone and animates nothing");
@@ -259,16 +261,17 @@ const C = await phone(); await C.fill("input", "Late"); await C.click("text=Join
 await C.waitForSelector(".refused"); await shot(C, "13-refused"); await fitsPhones(C, "refused", true); ok("third player refused: " + (await C.locator(".refused p").innerText()));
 
 // round 2: B reduced motion, A animates, then A reloads mid-round
-await B.click("text=Next round"); await A.waitForSelector("text=Draw your character");
 await B.emulateMedia({ reducedMotion: "reduce" });
+await B.click("text=Next round"); await A.waitForSelector("text=Draw your character");
 await B.click("text=Draw your character"); await B.waitForSelector(".secret");
 assert.equal(await B.locator(".secret.revealing, .slot").count(), 0); assert.equal(await timers(B), 1); ok("reduced motion: settled at once, no timer");
-assert.equal((await anims(B)).length, 0); ok("reduced motion: no embers or other animation while playing");
+assert.equal(await B.locator("#fly").isHidden(), true); assert.equal((await anims(B)).length, 0); ok("reduced motion: no embers or other animation while playing");
 await B.emulateMedia({ reducedMotion: "no-preference" });
 await A.click("text=Draw your character"); await A.waitForSelector(".secret.revealing");
 assert.deepEqual(await cardStyle(A), [rgb("#FFD400"), rgb("#1a0e05")]); ok("Andarna card #FFD400 with dark ink");
 await A.waitForSelector(".time"); await shot(A, "13b-andarna-mid");
 await A.reload(); await A.waitForSelector(".time");
+assert.equal(await A.locator("#fly").isHidden(), true); ok("reload: the restored screen is painted at once, no sweep over the join form");
 assert.equal(await A.locator(".secret.revealing, .slot").count(), 0); ok("rejoin: reload restored the playing screen, settled card");
 assert.ok(await A.evaluate(() => { try { return !!localStorage.getItem("gameToken"); } catch { return false; } }));
 await A.click("text=Got it"); await B.click("text=Got it");
@@ -292,7 +295,9 @@ await B.waitForSelector(".secret:not(.revealing)", { timeout: 4000 }); await sho
   ok("a 21-letter name wraps on spaces inside the banner at 320 and 360 with the big font");
 }
 await A.waitForSelector("text=Back to lobby", { timeout: 15000 }); ok("timeout: nobody pressed, round ended by the clock");
-assert.match(await A.locator(".verdict").innerText(), /\+0[\s\S]*\+0/); ok("timeout gains are +0 and +0");
+const verdict = async p => (await p.locator(".finale").getAttribute("class")).split(" ").pop();
+const [va, vb] = [await verdict(A), await verdict(B)];
+assert.deepEqual([va, vb], { win: ["win", "lose"], lose: ["lose", "win"], tie: ["tie", "tie"] }[va]); ok(`the finale agrees on both phones: ${va} / ${vb}`);
 await shot(A, "14-final-timeout");
 await shot(A, "15-final-A"); await shot(B, "15-final-B"); await namesFit(B, "final"); await fitsPhones(A, "final", true);
 assert.equal(await end(A).count(), 0); ok("final: no End game");

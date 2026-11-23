@@ -209,10 +209,36 @@ body.home:not(.scene) #screen { margin: auto 4px; }
 @keyframes glow { from { opacity: .65; } to { opacity: 1; } }
 .asleep .hearth * { animation-play-state: paused; }
 
+/* End screens: the art fills the top of the slab; the dragon is the one the sweep uses, the char and the embers are for the loser. */
+.finale { align-items: center; text-align: center; }
+.finale .art { flex: 0 1 auto; width: 100%; max-height: 46%; min-height: 0; fill: currentColor; color: #000; }
+.finale.tie .art { color: var(--muted); }
+.finale.win .art { color: #000; }
+.finale .head.big { margin-top: 0; }
+.final-score { font-size: 1.1rem; letter-spacing: .08em; }
+.ember { animation: ember 1.4s ease-in-out infinite alternate; }
+.ember.e2 { animation-delay: -.5s; } .ember.e3 { animation-delay: -.9s; }
+.smoke { animation: smoke 3s ease-in-out infinite alternate; }
+.smoke.s2 { animation-delay: -1.5s; }
+@keyframes ember { from { opacity: .2; } to { opacity: 1; } }
+@keyframes smoke { from { transform: translateY(0); opacity: .6; } to { transform: translateY(-10px); opacity: .2; } }
+.finale.win .rider { animation: bob 3.2s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: translate(6px, -8px); } }
+
+/* The dragon's shadow: a dark veil with soft ends and the silhouette on its leading edge, moved by render() in app.js. */
+.fly { position: fixed; z-index: 30; pointer-events: none; overflow: hidden; }
+.sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 240%; background: linear-gradient(90deg, transparent, #050308b0 8%, #050308f0 30%, #050308f0 80%, transparent); }
+.dragon { position: absolute; right: 2%; top: 50%; width: min(90vw, 560px); aspect-ratio: 1.86; transform: translateY(-50%); fill: #000; filter: drop-shadow(0 0 3px #e8b04acc); }
+.wing { transform-box: view-box; transform-origin: 242px 102px; animation: flap .32s ease-in-out infinite alternate; }
+.wing.far { animation-delay: -.16s; }
+@keyframes flap { from { transform: scaleY(1) rotate(0); } to { transform: scaleY(.55) rotate(-8deg); } }
+
 @media (max-height: 700px) {
   .title p { display: none; }
   button.big, .plinth > button { min-height: 48px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .glow, .f { animation: none; }
+  .fly { display: none; }
+  .ember, .smoke, .finale.win .rider { animation: none; }
 }

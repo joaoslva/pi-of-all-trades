@@ -211,6 +211,27 @@ const reveals = v => h("div", { class: "verdict" },
       h("div", { class: `hall mini${inkCls(c)}`, style: face(c) }, svgs(KNOTS), h("div", { class: "kind" }, c.kind), cart(c)),
       h("p", { class: "pts" }, `+${gain}`, h("small", {}, "points")))));
 
+// The dragon, drawn once: the sweep flaps its wings, the end screens show it still. The rider is only drawn on the winner's.
+// The near wing sweeps back over the tail, the far one is the same wing raised and shrunk behind the body. Wing ribs are even-odd slits.
+const DRAKE_BODY = "M394 63C394 63 385 55 378 52C371 49 362 46 356 44C350 42 353 45 344 39C335 33 306 10 306 10C306 10 330 39 334 44C338 49 332 43 326 40C320 37 300 30 300 30C300 30 321 44 324 50C327 56 319 59 316 62C313 65 308 64 308 64C308 64 306 70 304 72C302 74 296 76 296 76C296 76 293 82 290 84C287 86 280 86 280 86C280 86 279 92 276 94C273 96 266 96 266 96C266 96 263 102 256 102C249 102 238 98 226 98C214 98 202 99 190 100C178 101 168 103 162 102C156 101 154 96 154 96C154 96 150 105 146 106C142 107 134 102 134 102C134 102 130 107 124 110C118 113 109 114 100 118C91 122 82 126 72 130C62 134 54 137 46 138C38 139 31 141 26 138C21 135 20 122 20 122L-6 142L20 160C20 160 21 148 26 146C31 144 39 149 48 148C57 147 67 144 78 142C89 140 98 138 108 136C118 134 126 131 134 132C142 133 148 138 150 142C152 146 150 150 146 154C142 158 134 163 128 166C122 169 112 168 112 168C112 168 123 170 122 172C121 174 104 180 104 180C104 180 126 175 128 176C130 177 116 186 116 186C116 186 131 179 140 174C149 169 158 164 164 158C170 152 170 146 176 142C182 138 192 137 200 136C208 135 217 133 222 136C227 139 227 146 230 150C233 154 233 158 236 160C239 162 243 162 248 162C253 162 264 158 264 158C264 158 252 157 252 156C252 155 266 152 266 152C266 152 253 152 250 150C247 148 247 144 248 140C249 136 254 133 258 130C262 127 265 126 270 122C275 118 282 112 288 106C294 100 299 95 306 90C313 85 319 81 326 78C333 75 338 74 346 74C354 74 362 76 370 76C378 76 388 74 388 74L362 68L394 63Z", DRAKE_WING = "M245 103C247 80 242 58 229 44C217 32 203 23 191 17L193 1L180 16Q143 13 110 32Q128 35 68 70Q111 59 52 112Q112 79 72 143Q127 118 168 137L203 117ZM170 20L127 33L127 30ZM163 26L95 62L94 60ZM161 34L83 95L82 92ZM166 39L100 118L98 116Z";
+const drake = (flap, rider) => `<g transform="translate(242 102) rotate(54) scale(.72) translate(-242 -102)"><path fill-rule="evenodd" class="${flap ? "wing far" : ""}" d="${DRAKE_WING}"/></g><path d="${DRAKE_BODY}"/><path fill-rule="evenodd" class="${flap ? "wing" : ""}" d="${DRAKE_WING}"/>${rider ? '<path d="M278 94l2-24 12 1-2 23z"/><circle cx="287" cy="58" r="9"/><path d="M281 76C294 68 304 54 310 42L315 46C309 60 299 76 286 86z"/>' : ""}`;
+$("fly").querySelector(".dragon").innerHTML = drake(true);
+const FINALE = {
+  win: { head: "Victory!", lines: ["You were strong enough to survive Guessing Day.", "The dragons approve. Barely.", "Ride into the sunset, you earned it."],
+    art: `<svg class="art" viewBox="0 0 400 240" aria-hidden="true"><defs><radialGradient id="sun"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".6" stop-color="#e8b04a"/><stop offset="1" stop-color="#e8b04a00"/></radialGradient></defs>
+      <circle cx="250" cy="120" r="105" fill="url(#sun)"/><g stroke="#e8b04a" stroke-width="2" opacity=".5"><path d="M20 70h90M0 100h70M30 170h100M290 205h100"/></g>
+      <svg class="rider" x="60" y="40" width="300" height="161" viewBox="-10 -20 410 220">${drake(false, true)}</svg></svg>` },
+  lose: { head: "Burned!", lines: ["Scorched, toasted and served with a side of ash.", "The dragons found you... lacking.", "Roasted. Maybe next year."],
+    art: `<svg class="art" viewBox="0 0 400 240" aria-hidden="true"><defs><radialGradient id="char"><stop offset="0" stop-color="#000"/><stop offset=".55" stop-color="#150b08"/><stop offset="1" stop-color="#150b0800"/></radialGradient></defs>
+      <path d="M200 20l30 34 40-12-6 44 46 6-30 34 38 24-48 8 14 40-44-12-8 36-32-30-30 32-12-38-44 10 10-38-50-14 40-28-36-30 46-6-8-44 40 14z" fill="url(#char)"/>
+      <g stroke="#e0300a" stroke-width="2" fill="none" opacity=".75"><path d="M200 120l-20-28-8-30M200 120l30-18 22-34M200 120l-34 20-40 4M200 120l26 30 18 38M200 120l-6 36-20 30"/></g>
+      <g fill="#ff8a2a"><circle class="ember" cx="150" cy="64" r="3"/><circle class="ember e2" cx="262" cy="80" r="2.5"/><circle class="ember e3" cx="238" cy="190" r="3"/><circle class="ember e2" cx="132" cy="170" r="2"/></g>
+      <g stroke="#7d6c5f" stroke-width="5" fill="none" stroke-linecap="round" opacity=".5"><path class="smoke" d="M200 100c-20-20 20-30 0-50s20-30 0-46"/><path class="smoke s2" d="M236 112c-16-16 14-26 0-42"/></g></svg>` },
+  tie: { head: "A tie", lines: ["Both were lucky enough to survive Guessing Day.", "The dragons could not choose. Neither could the fire.", "Nobody burned. Nobody won. Everybody is suspicious."],
+    art: `<svg class="art" viewBox="0 0 400 240" aria-hidden="true"><circle cx="200" cy="120" r="90" fill="none" stroke="#e8b04a" stroke-width="2" opacity=".5"/>
+      <svg x="20" y="20" width="240" height="129" viewBox="-10 -20 410 220">${drake()}</svg><svg x="150" y="100" width="240" height="129" viewBox="-10 -20 410 220">${drake()}</svg></svg>` },
+};
+
 const screens = {
   join() {
     const input = h("input", { maxlength: "20", autocomplete: "nickname", "aria-label": "Your name", placeholder: "Your name", required: true });
@@ -266,11 +287,12 @@ const screens = {
       : [btn("Got it", () => act("got_it"), "primary"), btn("Forfeit", () => act("forfeit"))]));
   },
   roundEnd: v => hall(v, null, roundDia(v), h("div", { class: "well" }, h("h2", { class: "head" }, `Round ${v.round} ends`), reveals(v)),
-    plinth(btn("Next round", () => act("next"), "primary"))),
+    plinth(btn(v.round >= v.options.rounds ? "See the verdict" : "Next round", () => act("next"), "primary"))),
   final(v) {
-    const f = v.final;
-    return hall(v, null, ["Final", h("b", {}, `${v.round}/${v.options.rounds}`)], h("div", { class: "well" },
-      h("h2", { class: "head big" }, f.tie ? "A tie" : `${f.winner} wins`), h("p", { class: "sub" }, `${v.you.name} ${v.you.score} - ${v.other.score} ${v.other.name}`), reveals(v)),
+    const mine = v.you.score, theirs = v.other.score, kind = mine > theirs ? "win" : mine < theirs ? "lose" : "tie", t = FINALE[kind];
+    return hall(v, null, ["Final", h("b", {}, `${v.round}/${v.options.rounds}`)], h("div", { class: `well finale ${kind}` },
+      svgs(t.art), h("h2", { class: "head big" }, t.head), h("p", { class: "sub" }, t.lines[(mine + theirs) % t.lines.length]),
+      h("p", { class: "pts final-score" }, `${v.you.name} ${mine} - ${theirs} ${v.other.name}`)),
     plinth(btn("Back to lobby", () => act("back_to_lobby"), "primary")));
   },
 };
@@ -281,7 +303,32 @@ async function toggleHistory() {
   render(view);
 }
 
+// A change of screen sends a dragon's shadow across; the new screen is painted while the shadow covers it (the midpoint).
+// Between two game screens the shadow stays inside the slab's middle, so the plaques, timer and buttons hold still.
+const FLY_MS = 900;
+let shown = null, flying = null;
+// Drawing your own character is a screen change on its own phone, and the wait for the other player's draw is not another one.
+const screenKey = v => (refusal ? "refused" : !v ? "join" : showSettings && v.phase === "lobby" ? "settings" : v.phase === "playing" || (v.phase === "drawing" && v.drawn.you) ? "secret" : v.phase);
 function render(v) {
+  if (flying) { if (!flying.swapped) { flying.v = v; return; } shown = screenKey(v); paint(v); return; } // after the swap the screen is live under the leaving shadow
+  const key = screenKey(v), fly = $("fly");
+  if (shown === null || key === shown || matchMedia("(prefers-reduced-motion: reduce)").matches) { shown = key; paint(v); return; }
+  const bands = document.querySelectorAll(".hall > .band"), toGame = v && v.phase !== "lobby" && !refusal;
+  const r = bands.length === 2 && toGame ? { left: bands[0].getBoundingClientRect().left, width: bands[0].getBoundingClientRect().width,
+    top: bands[0].getBoundingClientRect().bottom, height: bands[1].getBoundingClientRect().top - bands[0].getBoundingClientRect().bottom }
+    : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  Object.assign(fly.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
+  const sweep = fly.firstElementChild;
+  const f = flying = { v }, screen = $("screen");
+  fly.hidden = false; screen.inert = true; // the old screen is already stale: no taps until the new one is painted
+  const swap = () => { if (f.swapped) return; f.swapped = true; screen.inert = false; shown = screenKey(f.v); paint(f.v); };
+  const done = () => { swap(); fly.hidden = true; if (flying === f) flying = null; };
+  const anim = sweep.animate([{ transform: `translateX(${-2.4 * r.width}px)` }, { transform: `translateX(${r.width}px)` }], { duration: FLY_MS, easing: "ease-in-out" });
+  anim.onfinish = anim.oncancel = done;
+  setTimeout(swap, FLY_MS / 2);
+}
+
+function paint(v) {
   document.body.classList.toggle("home", !v || v.phase === "lobby");
   document.body.classList.toggle("scene", !v);
   const screen = $("screen");
@@ -364,4 +411,4 @@ setInterval(() => {
 document.addEventListener("visibilitychange", () => document.body.classList.toggle("asleep", document.hidden));
 
 render(null);
-if (token) join("");
+if (token) { shown = null; join(""); } // the first real screen after a reload is painted at once, not swept in over the blank join form
