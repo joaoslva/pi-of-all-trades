@@ -17,8 +17,11 @@ const h = (tag, attrs = {}, ...kids) => {
   return el;
 };
 
-let token = store.get(), view = null, receivedAt = 0, es = null, refusal = null, showHistory = false, history = null, showSettings = false;
-let secretNode = null, secretKey = "", armedRound = 0, revealTimer = 0, rejoinTimer = 0, endArmed = 0;
+let token = store.get(), view = null, receivedAt = 0, es = null, refusal = null;
+let secretNode = null, secretKey = "", revealTimer = 0, rejoinTimer = 0;
+// What the player has open on screen. toJoin() replaces it, so nothing of it outlives the player.
+const fresh = () => ({ showSettings: false, showHistory: false, history: null, armedRound: 0, endArmed: 0 });
+let ui = fresh();
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined);
@@ -55,11 +58,11 @@ function connect() {
 
 // Every way back to the join screen comes through here, so no screen state outlives the player.
 function toJoin() {
-  clearTimeout(rejoinTimer); clearTimeout(endArmed); rejoinTimer = endArmed = 0;
+  clearTimeout(rejoinTimer); clearTimeout(ui.endArmed); rejoinTimer = 0;
   if (es) es.close();
   es = null; $("lost").hidden = true;
   store.del(); token = null; view = null; refusal = null;
-  showHistory = false; history = null; showSettings = false; armedRound = 0;
+  ui = fresh();
   try { sessionStorage.removeItem("gameTips"); } catch { /* nothing stored */ }
   render(null);
 }
@@ -178,7 +181,7 @@ function secretCard(v) {
     secretNode = h("div", { class: "secret" }, h("div", { class: "kindrow" }, h("div", { class: "kind" }, s.kind), hide),
       h("div", { class: "well" }, stage, cart(s), s.tips ? hints(s.tips, key) : null));
     // Animate only a draw this page saw happen: a reload mid-round shows the settled name.
-    if (!s.clip && armedRound === v.round && !matchMedia("(prefers-reduced-motion: reduce)").matches) startReveal(secretNode, s.name);
+    if (!s.clip && ui.armedRound === v.round && !matchMedia("(prefers-reduced-motion: reduce)").matches) startReveal(secretNode, s.name);
   }
   const hb = secretNode.querySelector(".hints");
   if (hb) hb.hidden = v.phase !== "playing";
@@ -189,10 +192,10 @@ const btn = (label, onclick, cls = "", extra = {}) => h("button", { class: cls, 
 const panel = (...kids) => h("div", { class: "panel" }, ...kids);
 // Two taps on purpose: the first arms it for 4 s, only the second ends the game for both phones.
 const endGame = () => h("button", { class: "end", onclick: () => {
-  if (endArmed) { clearTimeout(endArmed); endArmed = 0; act("end_game"); return; }
-  endArmed = setTimeout(() => { endArmed = 0; render(view); }, 4000);
+  if (ui.endArmed) { clearTimeout(ui.endArmed); ui.endArmed = 0; act("end_game"); return; }
+  ui.endArmed = setTimeout(() => { ui.endArmed = 0; render(view); }, 4000);
   render(view);
-} }, endArmed ? "Really end?" : "End game");
+} }, ui.endArmed ? "Really end?" : "End game");
 
 const plinth = (...kids) => h("div", { class: "plinth" }, ...kids);
 const reveals = v => h("div", { class: "verdict" },
@@ -209,20 +212,20 @@ const screens = {
   },
   lobby(v) {
     const o = v.options;
-    const hist = showHistory ? panel(h("h2", {}, "The scroll"), history == null ? h("p", { class: "muted" }, "Unrolling...")
-      : history.length === 0 ? h("p", { class: "muted" }, "No games yet.")
-      : h("ul", { class: "hist" }, history.map(g => h("li", {}, h("span", {}, g.players.map(p => `${p.name} ${p.score}`).join(" - ")),
+    const hist = ui.showHistory ? panel(h("h2", {}, "The scroll"), ui.history == null ? h("p", { class: "muted" }, "Unrolling...")
+      : ui.history.length === 0 ? h("p", { class: "muted" }, "No games yet.")
+      : h("ul", { class: "hist" }, ui.history.map(g => h("li", {}, h("span", {}, g.players.map(p => `${p.name} ${p.score}`).join(" - ")),
         h("span", { class: "muted" }, `${g.rounds}r, ${new Date(g.finished).toLocaleDateString()}`))))) : null;
     return [
       panel(h("h2", {}, "Lobby"), h("p", {}, `${v.you.name} (you)`),
         h("p", { class: v.other ? "" : "muted" }, v.other ? v.other.name : "Waiting for a second rider..."),
         h("p", { class: "muted summary" }, `${o.rounds} round${o.rounds > 1 ? "s" : ""}, ${fmt(o.seconds * 1000)}, hints ${o.hints ? "on" : "off"}, ${o.pool}`),
         v.endedBy ? h("p", { class: "notice" }, v.endedBy === v.you.name ? "You ended the game" : `${v.endedBy} ended the game`) : null),
-      btn("Settings", () => { showSettings = true; showHistory = false; render(view); }),
+      btn("Settings", () => { ui.showSettings = true; ui.showHistory = false; render(view); }),
       btn("Start", () => act("start"), "primary big", { disabled: !v.canStart }),
       hist,
       h("div", { class: "row" },
-        btn(showHistory ? "Roll up the scroll" : "Past games", toggleHistory, "link"),
+        btn(ui.showHistory ? "Roll up the scroll" : "Past games", toggleHistory, "link"),
         btn("Leave", leave, "link")),
     ];
   },
@@ -238,10 +241,10 @@ const screens = {
       row("Length", choice("seconds", 120, "2:00"), choice("seconds", 180, "3:00"), choice("seconds", 300, "5:00")),
       row("Hints", btn(o.hints ? "On" : "Off", () => set({ hints: !o.hints }), "", { "aria-pressed": String(o.hints), "aria-label": "Hints" })),
       row("Pool", choice("pool", "all", "All"), choice("pool", "riders", "Riders"), choice("pool", "dragons", "Dragons")),
-      btn("Back", () => { showSettings = false; render(view); }, "back"));
+      btn("Back", () => { ui.showSettings = false; render(view); }, "back"));
   },
   drawing(v) {
-    if (!v.drawn.you) armedRound = v.round;
+    if (!v.drawn.you) ui.armedRound = v.round;
     const st = h("p", { class: "st" }, v.drawn.other ? `${v.other.name} has drawn.` : `Waiting for ${v.other.name} to draw...`);
     return v.drawn.you ? hall(v, v.secret, roundDia(v), secretCard(v), plinth(st))
       : hall(v, null, roundDia(v), h("div", { class: "well" }, h("h2", { class: "head" }, "A new round"),
@@ -259,7 +262,7 @@ const screens = {
     plinth(btn(v.round >= v.options.rounds ? "See the verdict" : "Next round", () => act("next"), "primary"))),
   final(v) {
     const mine = v.you.score, theirs = v.other.score, kind = mine > theirs ? "win" : mine < theirs ? "lose" : "tie", t = FINALE[kind];
-    return hall(v, null, ["Final", h("b", {}, `${v.round}/${v.options.rounds}`)], h("div", { class: `well finale ${kind}` },
+    return hall(v, null, ["Final", h("b", {}, `${v.round}/${v.options.rounds}`)], h("div", { class: `well finale ${kind}`, "data-result": kind },
       svgs(t.art), h("h2", { class: "head big" }, t.head), h("p", { class: "sub" }, t.lines[(mine + theirs) % t.lines.length]),
       h("p", { class: "pts final-score" }, `${v.you.name} ${mine} - ${theirs} ${v.other.name}`)),
     plinth(btn("Back to lobby", () => act("back_to_lobby"), "primary")));
@@ -267,8 +270,8 @@ const screens = {
 };
 
 async function toggleHistory() {
-  showHistory = !showHistory;
-  if (showHistory) { history = null; render(view); const r = await api("/api/history"); history = r.ok ? r.j : []; }
+  ui.showHistory = !ui.showHistory;
+  if (ui.showHistory) { ui.history = null; render(view); const r = await api("/api/history"); ui.history = r.ok ? r.j : []; }
   render(view);
 }
 
@@ -278,24 +281,28 @@ const FLY_MS = 900;
 $("fly").querySelector(".dragon").innerHTML = drake(true);
 let shown = null, flying = null;
 // Drawing your own character is a screen change on its own phone, and the wait for the other player's draw is not another one.
-const screenKey = v => (refusal ? "refused" : !v ? "join" : showSettings && v.phase === "lobby" ? "settings" : v.phase === "playing" || (v.phase === "drawing" && v.drawn.you) ? "secret" : v.phase);
-function render(v) {
-  if (flying) { if (!flying.swapped) { flying.v = v; return; } shown = screenKey(v); paint(v); return; } // after the swap the screen is live under the leaving shadow
-  const key = screenKey(v), fly = $("fly");
-  if (shown === null || key === shown || matchMedia("(prefers-reduced-motion: reduce)").matches) { shown = key; paint(v); return; }
-  const bands = document.querySelectorAll(".hall > .band"), toGame = v && v.phase !== "lobby" && !refusal;
-  const r = bands.length === 2 && toGame ? { left: bands[0].getBoundingClientRect().left, width: bands[0].getBoundingClientRect().width,
-    top: bands[0].getBoundingClientRect().bottom, height: bands[1].getBoundingClientRect().top - bands[0].getBoundingClientRect().bottom }
-    : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+const screenKey = v => (refusal ? "refused" : !v ? "join" : ui.showSettings && v.phase === "lobby" ? "settings" : v.phase === "playing" || (v.phase === "drawing" && v.drawn.you) ? "secret" : v.phase);
+// Where the shadow flies: the whole page, or between two game screens only the slab's middle, between its two rune bands.
+function sweepRect(v) {
+  const [top, bottom] = [...document.querySelectorAll(".hall > .band")].map(b => b.getBoundingClientRect());
+  if (!bottom || !v || v.phase === "lobby" || refusal) return { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  return { left: top.left, top: top.bottom, width: top.width, height: bottom.top - top.bottom };
+}
+// The new screen is painted at the midpoint, once the shadow covers the old one; whichever of timer, finish or cancel comes first does it.
+function transition(v) {
+  const fly = $("fly"), screen = $("screen"), r = sweepRect(v), f = flying = { v };
   Object.assign(fly.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
-  const sweep = fly.firstElementChild;
-  const f = flying = { v }, screen = $("screen");
   fly.hidden = false; screen.inert = true; // the old screen is already stale: no taps until the new one is painted
   const swap = () => { if (f.swapped) return; f.swapped = true; screen.inert = false; shown = screenKey(f.v); paint(f.v); };
-  const done = () => { swap(); fly.hidden = true; if (flying === f) flying = null; };
-  const anim = sweep.animate([{ transform: `translateX(${-2.4 * r.width}px)` }, { transform: `translateX(${r.width}px)` }], { duration: FLY_MS, easing: "ease-in-out" });
-  anim.onfinish = anim.oncancel = done;
+  const anim = fly.firstElementChild.animate([{ transform: `translateX(${-2.4 * r.width}px)` }, { transform: `translateX(${r.width}px)` }], { duration: FLY_MS, easing: "ease-in-out" });
+  anim.onfinish = anim.oncancel = () => { swap(); fly.hidden = true; if (flying === f) flying = null; };
   setTimeout(swap, FLY_MS / 2);
+}
+function render(v) {
+  if (flying) { if (!flying.swapped) { flying.v = v; return; } shown = screenKey(v); paint(v); return; } // after the swap the screen is live under the leaving shadow
+  const key = screenKey(v);
+  if (shown === null || key === shown || matchMedia("(prefers-reduced-motion: reduce)").matches) { shown = key; paint(v); return; }
+  transition(v);
 }
 
 function paint(v) {
@@ -303,15 +310,15 @@ function paint(v) {
   document.body.classList.toggle("scene", !v);
   const screen = $("screen");
   if (!v || !(v.phase === "drawing" || v.phase === "playing")) { stopReveal(); secretNode = null; secretKey = ""; }
-  if (!v || !endable(v)) { clearTimeout(endArmed); endArmed = 0; }
+  if (!v || !endable(v)) { clearTimeout(ui.endArmed); ui.endArmed = 0; }
   if (refusal) {
     screen.replaceChildren(h("div", { class: "panel refused" }, h("h2", {}, "Refused"), h("p", {}, refusal),
       btn("Back", () => { refusal = null; render(view); }, "big")));
     return;
   }
   if (!v) { screen.replaceChildren(screens.join()); return; }
-  if (v.phase !== "lobby") showSettings = false;
-  const out = screens[showSettings ? "settings" : v.phase](v);
+  if (v.phase !== "lobby") ui.showSettings = false;
+  const out = screens[ui.showSettings ? "settings" : v.phase](v);
   screen.replaceChildren(...[out].flat().filter(Boolean));
 }
 

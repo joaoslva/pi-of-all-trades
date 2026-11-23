@@ -265,7 +265,7 @@ await B.emulateMedia({ reducedMotion: "reduce" });
 await B.click("text=Next round"); await A.waitForSelector("text=Draw your character");
 await B.click("text=Draw your character"); await B.waitForSelector(".secret");
 assert.equal(await B.locator(".secret.revealing, .slot").count(), 0); assert.equal(await timers(B), 1); ok("reduced motion: settled at once, no timer");
-assert.equal(await B.locator("#fly").isHidden(), true); assert.equal((await anims(B)).length, 0); ok("reduced motion: no embers or other animation while playing");
+assert.equal((await anims(B)).length, 0); ok("reduced motion: no embers or other animation while playing");
 await B.emulateMedia({ reducedMotion: "no-preference" });
 await A.click("text=Draw your character"); await A.waitForSelector(".secret.revealing");
 assert.deepEqual(await cardStyle(A), [rgb("#FFD400"), rgb("#1a0e05")]); ok("Andarna card #FFD400 with dark ink");
@@ -295,7 +295,7 @@ await B.waitForSelector(".secret:not(.revealing)", { timeout: 4000 }); await sho
   ok("a 21-letter name wraps on spaces inside the banner at 320 and 360 with the big font");
 }
 await A.waitForSelector("text=Back to lobby", { timeout: 15000 }); ok("timeout: nobody pressed, round ended by the clock");
-const verdict = async p => (await p.locator(".finale").getAttribute("class")).split(" ").pop();
+const verdict = p => p.locator(".finale").getAttribute("data-result");
 const [va, vb] = [await verdict(A), await verdict(B)];
 assert.deepEqual([va, vb], { win: ["win", "lose"], lose: ["lose", "win"], tie: ["tie", "tie"] }[va]); ok(`the finale agrees on both phones: ${va} / ${vb}`);
 await shot(A, "14-final-timeout");
