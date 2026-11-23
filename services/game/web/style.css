@@ -98,7 +98,7 @@ body:not(.home) .app { height: 100dvh; min-height: 0; padding: 0 0 env(safe-area
 .dia small { color: var(--muted); font-size: .6rem; letter-spacing: .04em; text-transform: uppercase; }
 .dia b { color: var(--gold); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
 .dia b.low { color: var(--danger-ink); }
-.crest { flex: none; height: calc(5.8rem - 22px); }
+.crest { flex: none; height: calc(5.8rem - 8px); } /* clears the plaques and the diamond so the top rune band is a whole line */
 .plaque { top: 36px; width: min(6.2rem, calc(50% - 2.2rem + 14px)); padding: 4px 8px 5px 16px; line-height: 1.1; display: grid;
   clip-path: polygon(0 50%, 12px 0, 100% 0, 100% 100%, 12px 100%); }
 .plaque.l { left: -20px; } .plaque.r { right: -20px; padding: 4px 16px 5px 8px; text-align: right; clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%); }
@@ -174,15 +174,9 @@ body.home:not(.scene) #screen { margin: auto 4px; }
   background: linear-gradient(160deg, #2e211b, var(--canvas) 60%);
   border: 18px solid transparent; border-image: var(--frame) 26 / 18px stretch; box-shadow: 0 10px 14px #000a;
 }
-.home #screen::before {
-  content: ""; position: absolute; left: 25%; right: 25%; top: -36px; height: 27px;
-  background: linear-gradient(to top right, transparent 49%, #9c7a46 50%, transparent 52%) left / 50% 100% no-repeat,
-    linear-gradient(to top left, transparent 49%, #9c7a46 50%, transparent 52%) right / 50% 100% no-repeat;
-}
-.home #screen::after { content: ""; position: absolute; left: calc(50% - 4px); top: -40px; width: 8px; height: 8px; border-radius: 50%; background: #c9a35a; }
 .home .panel:not(.refused) { background: none; border: 0; padding: 0; }
 .home .title {
-  order: 2; z-index: 1; margin: 0 auto; width: 80%; padding: 6px 8px 5px; border: 0; border-radius: 2px; box-shadow: none;
+  order: 2; z-index: 1; margin: 0 auto 14px; width: 80%; padding: 6px 8px 5px; border: 0; border-radius: 2px; box-shadow: none;
   background: linear-gradient(var(--lintel-hi), var(--lintel));
 }
 .home .title::before { content: ""; position: absolute; left: -7%; right: -7%; top: -12px; height: 12px; border-radius: 2px; background: linear-gradient(#6b4a30, #2e1d12); }
